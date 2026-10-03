@@ -158,3 +158,44 @@ export const moduleApi = {
   removeQuestion: (id: string, questionId: string) =>
     api.del<{ ok: boolean }>(`/api/modules/${id}/questions/${questionId}`),
 };
+
+// ---------------------------------------------------------------------------
+// Batches
+// ---------------------------------------------------------------------------
+
+export interface BatchSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  copiedFromBatchId: string | null;
+  studentCount: number;
+}
+
+export interface RosterEntry {
+  studentId: string;
+  name: string;
+  rollNo: string;
+  joinedAt: string;
+}
+
+export interface BatchDetail extends BatchSummary {
+  roster: RosterEntry[];
+}
+
+export const batchApi = {
+  list: () => api.get<BatchSummary[]>("/api/batches"),
+  create: (input: {
+    name: string;
+    description?: string | null;
+    copyFromBatchId?: string | null;
+    copyRoster?: boolean;
+  }) => api.post<BatchSummary>("/api/batches", input),
+  get: (id: string) => api.get<BatchDetail>(`/api/batches/${id}`),
+  update: (id: string, input: { name?: string; description?: string | null }) =>
+    api.patch<BatchSummary>(`/api/batches/${id}`, input),
+  archive: (id: string) => api.del<{ id: string; archived: boolean }>(`/api/batches/${id}`),
+  addStudent: (id: string, input: { name?: string; rollNo?: string; studentId?: string }) =>
+    api.post<{ batchId: string; studentId: string }>(`/api/batches/${id}/students`, input),
+  removeStudent: (id: string, studentId: string) =>
+    api.del<{ ok: boolean }>(`/api/batches/${id}/students/${studentId}`),
+};

@@ -13,14 +13,15 @@
     "@kap-exam/shared": "workspace:*",
     "@kap-exam/ui": "workspace:*",
     "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cn": "^0.4.0",
     "lucide-react": "^0.469.0",
     "next": "16.3.8",
     "radix-ui": "^1.6.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "sonner": "^2.0.8",
-    "tailwind-merge": "^2.6.0",
-    "clsx": "^2.1.1"
+    "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
