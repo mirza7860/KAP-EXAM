@@ -1,5 +1,15 @@
 import { ATTEMPT_STATUSES, computeAttemptDeadline } from "@kap-exam/shared";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@kap-exam/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+  Logo,
+} from "@kap-exam/ui";
 import { useState } from "react";
 
 /**
@@ -17,18 +27,21 @@ export default function App() {
   );
 
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col justify-center gap-6 p-6">
-      <div className="space-y-1">
-        <Badge variant="secondary">KAP Exam</Badge>
-        <h1 className="text-2xl font-semibold tracking-tight">Join your exam</h1>
-        <p className="text-muted-foreground text-sm">
-          Enter your name and roll number exactly as your teacher knows them.
-        </p>
+    <main className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center gap-6 p-6">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <Logo height={34} />
+        <div className="space-y-1">
+          <Badge variant="secondary">Join an exam</Badge>
+          <h1 className="text-2xl font-semibold tracking-tight">Enter your details</h1>
+          <p className="text-muted-foreground text-sm">
+            Use the name and roll number exactly as your teacher knows them.
+          </p>
+        </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Your details</CardTitle>
+          <CardTitle>Your roll number</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -44,7 +57,7 @@ export default function App() {
           <Button className="w-full" disabled={name.trim().length < 2}>
             Start exam
           </Button>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-center text-xs">
             Server deadline: {sampleDeadline.toISOString()} · statuses: {ATTEMPT_STATUSES.length}
           </p>
         </CardContent>

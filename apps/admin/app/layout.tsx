@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "KAP Exam · Admin",
   description: "Question bank, batches, exams and report cards for KAP.",
+};
+
+// Theme follows the system only; these colours tint the browser chrome.
+export const viewport: Viewport = {
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fdf9f3" },
+    { media: "(prefers-color-scheme: dark)", color: "#241d18" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
