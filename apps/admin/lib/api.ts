@@ -15,11 +15,17 @@ import type {
  */
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
+const STUDENT_URL = process.env.NEXT_PUBLIC_STUDENT_URL ?? "http://localhost:5173";
 const TOKEN_KEY = "kap_exam_token";
 
 /** Absolute URL for a question's uploaded media (R2-backed). */
 export function mediaUrl(key: string): string {
   return `${API_URL}/api/media/${key}`;
+}
+
+/** The link a teacher shares for a published exam. */
+export function joinUrl(joinCode: string): string {
+  return `${STUDENT_URL}/j/${joinCode}`;
 }
 
 export class ApiError extends Error {
@@ -198,4 +204,80 @@ export const batchApi = {
     api.post<{ batchId: string; studentId: string }>(`/api/batches/${id}/students`, input),
   removeStudent: (id: string, studentId: string) =>
     api.del<{ ok: boolean }>(`/api/batches/${id}/students/${studentId}`),
+};
+
+// ---------------------------------------------------------------------------
+// Exams
+// ---------------------------------------------------------------------------
+
+export interface ExamSummary {
+  id: string;
+  batchId: string;
+  batchName: string;
+  title: string;
+  status: "draft" | "published" | "closed";
+  startsAt: string;
+  endsAt: string;
+  durationMinutes: number;
+  joinCode: string;
+  questionCount: number;
+  shuffleQuestions: boolean;
+  shuffleOptions: boolean;
+  lockToDevice: boolean;
+}
+
+export interface PaperItem {
+  position: number;
+  questionId: string;
+  marks: number;
+  question: Question;
+}
+
+export interface ExamDetail extends ExamSummary {
+  paper: PaperItem[];
+  maxScore: number;
+}
+
+export interface ExamLiveState {
+  config?: { examId: string; endsAt: number; durationMinutes: number } | null;
+  serverNow: number;
+  participants: {
+    attemptId: string;
+    name: string;
+    rollNo: string;
+    status: string;
+    answeredCount: number;
+    deadlineAt: number;
+    lastSeenAt: number;
+  }[];
+  violations: { attemptId: string; type: string; receivedAt: number }[];
+}
+
+export const examApi = {
+  list: () => api.get<ExamSummary[]>("/api/exams"),
+  create: (input: {
+    batchId: string;
+    title: string;
+    schedule: { startsAt: string; endsAt: string; durationMinutes: number };
+    shuffleQuestions?: boolean;
+    shuffleOptions?: boolean;
+  }) => api.post<ExamSummary>("/api/exams", input),
+  get: (id: string) => api.get<ExamDetail>(`/api/exams/${id}`),
+  update: (
+    id: string,
+    input: {
+      title?: string;
+      schedule?: { startsAt: string; endsAt: string; durationMinutes: number };
+      shuffleQuestions?: boolean;
+      shuffleOptions?: boolean;
+    },
+  ) => api.patch<ExamSummary>(`/api/exams/${id}`, input),
+  compose: (id: string, input: { moduleIds: string[]; questionIds: string[] }) =>
+    api.post<{ questionCount: number; maxScore: number; paper: PaperItem[] }>(
+      `/api/exams/${id}/compose`,
+      input,
+    ),
+  publish: (id: string) => api.post<ExamSummary>(`/api/exams/${id}/publish`, {}),
+  close: (id: string) => api.post<ExamSummary>(`/api/exams/${id}/close`, {}),
+  live: (id: string) => api.get<ExamLiveState>(`/api/exams/${id}/live`),
 };

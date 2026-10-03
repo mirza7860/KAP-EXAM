@@ -90,6 +90,8 @@ export class ExamSession implements DurableObject {
         return this.handleSubmit(request);
       case "POST /violation":
         return this.handleViolation(request);
+      case "POST /close":
+        return this.handleClose();
       case "GET /state":
         return this.handleState();
       default:
@@ -228,6 +230,22 @@ export class ExamSession implements DurableObject {
     list.push(record);
     await this.state.storage.put(VIOLATIONS_KEY, list);
     // TODO: mirror into D1 `violations` and bump attempts.violation_count.
+  }
+
+  /** Teacher closed the exam early: end it now and time out anyone still working. */
+  private async handleClose(): Promise<Response> {
+    const config = await this.config();
+    const participants = await this.participants();
+    const now = Date.now();
+    for (const participant of participants.values()) {
+      if (participant.status === "in_progress") participant.status = "timed_out";
+    }
+    await this.saveParticipants(participants);
+    if (config) {
+      config.endsAt = Math.min(config.endsAt, now);
+      await this.state.storage.put(CONFIG_KEY, config);
+    }
+    return json({ ok: true, serverNow: now });
   }
 
   private async handleState(): Promise<Response> {

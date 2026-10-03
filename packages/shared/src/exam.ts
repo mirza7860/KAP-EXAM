@@ -67,6 +67,35 @@ export const examSchema = z.object({
 
 export type Exam = z.infer<typeof examSchema>;
 
+/** Create a draft exam. */
+export const examCreateSchema = z.object({
+  batchId: z.string().min(1),
+  title: z.string().trim().min(1).max(160),
+  schedule: examScheduleSchema,
+  shuffleQuestions: z.boolean().default(false),
+  shuffleOptions: z.boolean().default(false),
+  lockToDevice: z.boolean().default(true),
+});
+
+export type ExamCreateInput = z.infer<typeof examCreateSchema>;
+
+/** Compose a draft exam's paper from modules and/or hand-picked questions. */
+export const examComposeSchema = z.object({
+  moduleIds: z.array(z.string().min(1)).default([]),
+  questionIds: z.array(z.string().min(1)).default([]),
+});
+
+export type ExamComposeInput = z.infer<typeof examComposeSchema>;
+
+/** Edit a draft exam. */
+export const examUpdateSchema = z.object({
+  title: z.string().trim().min(1).max(160).optional(),
+  schedule: examScheduleSchema.optional(),
+  shuffleQuestions: z.boolean().optional(),
+  shuffleOptions: z.boolean().optional(),
+  lockToDevice: z.boolean().optional(),
+});
+
 /** One question as it appears in a frozen exam paper. */
 export const examPaperItemSchema = z.object({
   examId: z.string().min(1),
