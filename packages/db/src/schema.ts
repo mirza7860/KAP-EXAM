@@ -112,6 +112,7 @@ export const topics = sqliteTable(
     name: text("name").notNull(),
     position: integer("position").notNull().default(0),
     createdAt: ts("created_at").notNull().default(now),
+    archivedAt: ts("archived_at"),
   },
   (t) => [index("topics_parent_idx").on(t.parentId)],
 );
@@ -149,6 +150,7 @@ export const questionModules = sqliteTable(
     description: text("description"),
     parentId: text("parent_id"),
     createdAt: ts("created_at").notNull().default(now),
+    archivedAt: ts("archived_at"),
   },
   (t) => [index("question_modules_parent_idx").on(t.parentId)],
 );

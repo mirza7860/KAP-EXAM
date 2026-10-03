@@ -11,8 +11,8 @@
   "scripts": {
     "generate": "drizzle-kit generate",
     "push": "drizzle-kit push",
-    "migrate:local": "wrangler d1 migrations apply kap-exam --local --config ../../apps/api/wrangler.toml",
-    "migrate:remote": "wrangler d1 migrations apply kap-exam --remote --config ../../apps/api/wrangler.toml",
+    "migrate:local": "wrangler d1 migrations apply kap-exam-db --local --config ../../apps/api/wrangler.toml",
+    "migrate:remote": "wrangler d1 migrations apply kap-exam-db --remote --config ../../apps/api/wrangler.toml",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "clean": "rimraf .turbo dist"

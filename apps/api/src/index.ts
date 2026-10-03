@@ -9,7 +9,7 @@ import { authRoutes } from "./routes/auth.js";
 import { batchRoutes } from "./routes/batches.js";
 import { examRoutes } from "./routes/exams.js";
 import { mediaRoutes } from "./routes/media.js";
-import { questionRoutes } from "./routes/questions.js";
+import { moduleRoutes, questionRoutes, topicRoutes } from "./routes/questions.js";
 import { reportRoutes } from "./routes/reports.js";
 
 const app = new Hono<AppBindings>();
@@ -43,7 +43,9 @@ app.route("/api/media", mediaRoutes);
 const teacherRoutes = new Hono<AppBindings>();
 teacherRoutes.use("*", requireTeacher);
 teacherRoutes.route("/batches", batchRoutes);
+teacherRoutes.route("/topics", topicRoutes);
 teacherRoutes.route("/questions", questionRoutes);
+teacherRoutes.route("/modules", moduleRoutes);
 teacherRoutes.route("/exams", examRoutes);
 teacherRoutes.route("/reports", reportRoutes);
 app.route("/api", teacherRoutes);
