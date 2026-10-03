@@ -1,0 +1,74 @@
+# KAP EXAM API — Cloudflare Worker.
+#
+# NAMESPACE: everything here is prefixed `kap-exam-` so this project can never
+# touch the separately-deployed `kap-api` Worker / `kap-materials` buckets.
+# The default (top-level) config is LOCAL/dev on purpose: a bare `wrangler
+# deploy` must not be able to overwrite production.
+name = "kap-exam-api-dev"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "development"
+# Comma-separated. Student PWA + admin origins.
+ALLOWED_ORIGINS = "http://localhost:3000,http://localhost:5173"
+# How long a heartbeat may be missing before an attempt is flagged for review.
+HEARTBEAT_GRACE_SECONDS = "45"
+
+[observability]
+enabled = true
+
+# Relational data: teachers, batches, students, question bank, exams, attempts.
+[[d1_databases]]
+binding = "DB"
+database_name = "kap-exam-db"
+# Replace after `wrangler d1 create kap-exam-db`.
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "../../packages/db/migrations"
+
+# One Durable Object per exam session: authoritative timer, live roster,
+# violation log. This is the trust boundary — never the student's browser.
+[[durable_objects.bindings]]
+name = "EXAM_SESSION"
+class_name = "ExamSession"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ExamSession"]
+
+# Question media (diagrams, images).
+[[r2_buckets]]
+binding = "MATERIALS_BUCKET"
+bucket_name = "kap-exam-materials"
+
+# Join-code lookup, rate limiting, ephemeral counters.
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# ---------------------------------------------------------------------------
+# Production
+# ---------------------------------------------------------------------------
+
+[env.production]
+name = "kap-exam-api"
+vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://kap-exam.vercel.app,https://kap-exam-student.vercel.app", HEARTBEAT_GRACE_SECONDS = "45" }
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "kap-exam-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "../../packages/db/migrations"
+
+[[env.production.durable_objects.bindings]]
+name = "EXAM_SESSION"
+class_name = "ExamSession"
+
+[[env.production.r2_buckets]]
+binding = "MATERIALS_BUCKET"
+bucket_name = "kap-exam-materials"
+
+[[env.production.kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"

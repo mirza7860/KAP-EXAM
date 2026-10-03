@@ -1,0 +1,28 @@
+{
+  "name": "kap-exam",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rimraf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "db:generate": "pnpm --filter @kap-exam/db generate",
+    "db:migrate:local": "pnpm --filter @kap-exam/db migrate:local",
+    "db:migrate:remote": "pnpm --filter @kap-exam/db migrate:remote"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "rimraf": "^6.0.1",
+    "turbo": "^2.5.4",
+    "typescript": "^5.7.3"
+  }
+}

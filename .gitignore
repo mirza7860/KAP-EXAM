@@ -1,0 +1,30 @@
+# dependencies
+node_modules
+.pnpm-store
+
+# builds
+dist
+build
+.next
+out
+.vercel
+.turbo
+
+# wrangler / cloudflare
+.wrangler
+.dev.vars
+**/.dev.vars
+worker-configuration.d.ts
+
+# env
+.env
+.env.*
+!.env.example
+
+# misc
+.DS_Store
+*.log
+*.tsbuildinfo
+.idea
+.vscode/*
+!.vscode/extensions.json

@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@import "../../../packages/ui/src/styles/theme.css";
+
+/* Tailwind v4 scans source files; the shared UI package lives outside this app. */
+@source "../../../packages/ui/src";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}

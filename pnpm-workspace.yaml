@@ -1,0 +1,12 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Packages allowed to run install scripts (they need to build/download binaries).
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - workerd
+  - better-sqlite3
+  - "@tailwindcss/oxide"
+  - unrs-resolver

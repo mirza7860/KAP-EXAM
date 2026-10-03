@@ -1,0 +1,2 @@
+# Drizzle generates the D1 migrations into this folder.
+# Kept in git so `wrangler d1 migrations apply` has a directory to read.
