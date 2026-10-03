@@ -44,9 +44,18 @@ authRoutes.post("/signup", async (c) => {
   };
   await db.insert(schema.teachers).values(teacher);
 
-  setSessionCookie(c, await issueSession(teacher, c.env.JWT_SECRET), c.env.ENVIRONMENT !== "development");
+  const token = await issueSession(teacher, c.env.JWT_SECRET);
+  setSessionCookie(c, token, c.env.ENVIRONMENT !== "development");
   return c.json(
-    { data: { teacherId: teacher.id, name: teacher.name, email: teacher.email, role: teacher.role } },
+    {
+      data: {
+        teacherId: teacher.id,
+        name: teacher.name,
+        email: teacher.email,
+        role: teacher.role,
+        token,
+      },
+    },
     201,
   );
 });
@@ -71,9 +80,16 @@ authRoutes.post("/signin", async (c) => {
     email: teacher.email,
     role: teacher.role,
   };
-  setSessionCookie(c, await issueSession(identity, c.env.JWT_SECRET), c.env.ENVIRONMENT !== "development");
+  const token = await issueSession(identity, c.env.JWT_SECRET);
+  setSessionCookie(c, token, c.env.ENVIRONMENT !== "development");
   return c.json({
-    data: { teacherId: identity.id, name: identity.name, email: identity.email, role: identity.role },
+    data: {
+      teacherId: identity.id,
+      name: identity.name,
+      email: identity.email,
+      role: identity.role,
+      token,
+    },
   });
 });
 
