@@ -67,6 +67,15 @@ it via `GET /api/media/:key` while taking the exam, so the image travels with th
 frozen paper snapshot and needs no student session. Short cache TTL, and the PWA
 service worker never caches API traffic.
 
+## D12 — Theme: warm, system-only
+
+The palette is warm (cream/espresso light, warm charcoal dark) with a terracotta
+`--primary`. Light/dark is selected **only** by `prefers-color-scheme` — there is
+no toggle and no stored preference. Enforced with a media-based Tailwind variant
+(`@custom-variant dark (@media (prefers-color-scheme: dark))`) and a CSS-only
+`Logo` swap (colored mark on light, white mark on dark), so nothing depends on JS
+and there is no flash on load.
+
 ## Open / deferred
 
 - Randomization per student (shuffle questions/options) is in the schema but not
