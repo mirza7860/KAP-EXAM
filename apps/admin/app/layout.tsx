@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Toaster } from "@kap-exam/ui";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { SessionProvider } from "@/lib/session";
 import "./globals.css";
 
@@ -34,8 +35,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">
-        <SessionProvider>{children}</SessionProvider>
+      <body className="min-h-full font-sans">
+        <SessionProvider>
+          <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+        </SessionProvider>
         <Toaster />
       </body>
     </html>

@@ -7,9 +7,11 @@ import { cn } from "../lib/cn";
  * The coloured mark shows in light mode; the white mark shows in dark mode,
  * selected purely by `prefers-color-scheme` (see theme.css). Both images are
  * present in the DOM and one is hidden, so there is no flash on load.
+ *
+ * `height` sets the rendered height in px; width follows the 1923×818 mark's
+ * aspect ratio.
  */
 export interface LogoProps extends Omit<React.ComponentProps<"span">, "children"> {
-  /** Rendered height; width follows the 1923×818 aspect ratio. */
   height?: number;
   alt?: string;
   lightSrc?: string;
@@ -22,26 +24,20 @@ export function Logo({
   alt = "KAP",
   lightSrc = "/kap-logo.png",
   darkSrc = "/kap-logo-white.png",
+  style,
   ...props
 }: LogoProps) {
-  const imgClass = "w-auto object-contain";
   return (
     <span
       data-slot="logo"
-      className={cn("inline-flex items-center", className)}
-      style={{ height }}
+      className={cn("inline-flex shrink-0 items-center", className)}
+      style={{ height, ...style }}
       {...props}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={lightSrc} alt={alt} height={height} className={cn(imgClass, "dark:hidden")} />
+      <img src={lightSrc} alt={alt} className="block h-full w-auto dark:hidden" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={darkSrc}
-        alt=""
-        aria-hidden
-        height={height}
-        className={cn(imgClass, "hidden dark:block")}
-      />
+      <img src={darkSrc} alt="" aria-hidden className="hidden h-full w-auto dark:block" />
     </span>
   );
 }

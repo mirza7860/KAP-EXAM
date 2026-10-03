@@ -1,19 +1,18 @@
 "use client";
 
 import type { Question, Topic } from "@kap-exam/shared";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
-  Badge,
-  Button,
-  Card,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
-  toast,
-} from "@kap-exam/ui";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   ChevronRight,
   FolderPlus,
@@ -25,6 +24,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import { QuestionEditor } from "@/components/question-editor";
 import { PageBody, PageHeader } from "@/components/page-header";
 import { QUESTION_TYPE_LABELS } from "@/lib/question-form";

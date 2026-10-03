@@ -1,7 +1,11 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @import "../../../packages/ui/src/styles/theme.css";
 
-/* Tailwind v4 scans source files; the shared UI package lives outside this app. */
+/*
+ * Tailwind v4 scans this app automatically. The shared UI package lives
+ * outside the app root, so it needs an explicit source.
+ */
 @source "../../../packages/ui/src";
 
 @theme inline {

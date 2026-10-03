@@ -2,22 +2,28 @@
 
 import type { Question, QuestionInput, QuestionType } from "@kap-exam/shared";
 import { QUESTION_TYPE_LABELS, emptyMcqOptions } from "@/lib/question-form";
+import { Button } from "@/components/ui/button";
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
-  Label,
-  NativeSelect,
-  Textarea,
-  toast,
-} from "@kap-exam/ui";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { toast } from "sonner";
 import { ApiError, api, mediaUrl, questionApi } from "@/lib/api";
 
 interface DraftState {
@@ -231,17 +237,18 @@ export function QuestionEditor({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="q-type">Type</Label>
-              <NativeSelect
-                id="q-type"
-                value={draft.type}
-                onChange={(e) => changeType(e.target.value as QuestionType)}
-              >
-                {Object.entries(QUESTION_TYPE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </NativeSelect>
+              <Select value={draft.type} onValueChange={(value) => changeType(value as QuestionType)}>
+                <SelectTrigger id="q-type" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(QUESTION_TYPE_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
