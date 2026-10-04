@@ -29,6 +29,39 @@ async function loadPaperQuestions(db: Database, examId: string): Promise<Questio
   return items.map((it) => JSON.parse(it.snapshotJson) as Question);
 }
 
+/** Score an attempt from the frozen paper + saved answers (re-graded from snapshots). */
+async function scoreAttempt(db: Database, attemptId: string, examId: string) {
+  const paperQuestions = await loadPaperQuestions(db, examId);
+  const saved = await db.select().from(schema.answers).where(eq(schema.answers.attemptId, attemptId));
+  const savedMap = new Map(saved.map((a) => [a.questionId, a]));
+
+  let score = 0;
+  let correct = 0;
+  let wrong = 0;
+  let unattempted = 0;
+  const maxScore = paperQuestions.reduce((s, q) => s + q.marks, 0);
+
+  for (const q of paperQuestions) {
+    const ans = savedMap.get(q.id);
+    if (!ans) {
+      unattempted++;
+      continue;
+    }
+    let sel: string[] = [];
+    try {
+      sel = JSON.parse(ans.selectedJson as string) as string[];
+    } catch {
+      sel = [];
+    }
+    const g = gradeQuestion(q, { selectedOptionIds: sel, numericValue: ans.numericValue });
+    score += g.awardedMarks;
+    if (g.isCorrect === null) unattempted++;
+    else if (g.isCorrect) correct++;
+    else wrong++;
+  }
+  return { score, maxScore, correct, wrong, unattempted };
+}
+
 async function resolveAttempt(c: Context<AppBindings>, attemptId: string) {
   const attempt = await c
     .get("db")
@@ -115,11 +148,15 @@ attemptRoutes.post("/join", async (c) => {
     .where(and(eq(schema.attempts.examId, exam.id), eq(schema.attempts.studentId, student.id)))
     .get();
   if (existingAttempt && existingAttempt.status !== "in_progress") {
-    throw new ApiError(apiErrorCodes.alreadySubmitted, "You have already finished this exam");
+    throw new ApiError(apiErrorCodes.alreadySubmitted, "You have already finished this exam", {
+      attemptId: [existingAttempt.id],
+    });
   }
   // Device lock: same attempt must come from same browser unless teacher allows.
   if (existingAttempt && exam.lockToDevice && existingAttempt.deviceToken && existingAttempt.deviceToken !== deviceToken) {
-    throw new ApiError(apiErrorCodes.attemptLocked, "This exam is locked to the device you started on.");
+    throw new ApiError(apiErrorCodes.attemptLocked, "This exam is locked to the device you started on.", {
+      attemptId: [existingAttempt.id],
+    });
   }
 
   // Load frozen paper
@@ -303,23 +340,15 @@ attemptRoutes.post("/submit", async (c) => {
   }
 
   // Finalize scoring from frozen paper + saved answers
+  const { score, maxScore, correct, wrong, unattempted } = await scoreAttempt(db, attempt.id, attempt.examId);
+
+  // persist normalized grading per answer
   const paperQuestions = await loadPaperQuestions(db, attempt.examId);
   const saved = await db.select().from(schema.answers).where(eq(schema.answers.attemptId, attempt.id));
   const savedMap = new Map(saved.map((a) => [a.questionId, a]));
-
-  let score = 0;
-  let correct = 0;
-  let wrong = 0;
-  let unattempted = 0;
-  const maxScore = paperQuestions.reduce((s, q) => s + q.marks, 0);
-
   for (const q of paperQuestions) {
     const ans = savedMap.get(q.id);
-    if (!ans) {
-      unattempted++;
-      continue;
-    }
-    // Re-grade from snapshot to be safe (in case grading rules changed, snapshot is source)
+    if (!ans) continue;
     let sel: string[] = [];
     try {
       sel = JSON.parse(ans.selectedJson as string) as string[];
@@ -327,11 +356,6 @@ attemptRoutes.post("/submit", async (c) => {
       sel = [];
     }
     const g = gradeQuestion(q, { selectedOptionIds: sel, numericValue: ans.numericValue });
-    score += g.awardedMarks;
-    if (g.isCorrect === null) unattempted++;
-    else if (g.isCorrect) correct++;
-    else wrong++;
-    // persist normalized grading
     await db
       .update(schema.answers)
       .set({ isCorrect: g.isCorrect, awardedMarks: g.awardedMarks })
@@ -361,7 +385,7 @@ attemptRoutes.post("/violation", async (c) => {
   return c.json(result.data, result.status as 200);
 });
 
-/** Read-only attempt state for resume / result screen. */
+/** Read-only attempt state for resume / result screen. Closed attempts include the breakdown. */
 attemptRoutes.get("/:id", async (c) => {
   const db = c.get("db");
   const attempt = await resolveAttempt(c, c.req.param("id"));
@@ -369,13 +393,24 @@ attemptRoutes.get("/:id", async (c) => {
   const student = await db.select().from(schema.students).where(eq(schema.students.id, attempt.studentId)).get();
   const paperQuestions = await loadPaperQuestions(db, attempt.examId);
   const saved = await db.select().from(schema.answers).where(eq(schema.answers.attemptId, attempt.id));
+  const maxScore = paperQuestions.reduce((s, q) => s + q.marks, 0);
+  const result =
+    attempt.status === "in_progress"
+      ? null
+      : await scoreAttempt(db, attempt.id, attempt.examId);
   return c.json({
     data: {
-      attempt,
+      attempt: {
+        id: attempt.id,
+        status: attempt.status,
+        score: attempt.score ?? result?.score ?? null,
+        submittedAt: attempt.submittedAt,
+      },
       exam: exam ? { id: exam.id, title: exam.title } : null,
       student: student ? { name: student.name, rollNo: student.rollNo } : null,
-      maxScore: paperQuestions.reduce((s, q) => s + q.marks, 0),
+      maxScore,
       answeredCount: saved.length,
+      result,
     },
   });
 });

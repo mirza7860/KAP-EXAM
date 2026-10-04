@@ -13,20 +13,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { AiGenerateDialog } from "@/components/ai-generate-dialog";
 import { NameDialog } from "@/components/name-dialog";
 import { QuestionEditor } from "@/components/question-editor";
 import { PageBody, PageHeader } from "@/components/page-header";
 import { QUESTION_TYPE_LABELS } from "@/lib/question-form";
 import { cn } from "@/lib/utils";
-import {
-  ChevronRight,
-  Loader2,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { ChevronRight, ClipboardList, Loader2, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ApiError, questionApi, topicApi } from "@/lib/api";
@@ -38,6 +32,7 @@ type NameDialogState =
   | null;
 
 export default function QuestionsPage() {
+  const router = useRouter();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loadingTopics, setLoadingTopics] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -51,6 +46,7 @@ export default function QuestionsPage() {
   const [nameDialog, setNameDialog] = useState<NameDialogState>(null);
   const [topicToDelete, setTopicToDelete] = useState<Topic | null>(null);
   const [questionToDelete, setQuestionToDelete] = useState<Question | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
 
   const roots = useMemo(() => topics.filter((topic) => topic.parentId === null), [topics]);
   const childrenOf = useCallback(
@@ -143,6 +139,25 @@ export default function QuestionsPage() {
     }
   }
 
+  /** One click from the bank to an exam draft prefilled with this pool. */
+  function examFromHere() {
+    if (!selectedTopic) return;
+    const isRoot = selectedTopic.parentId === null;
+    const draft = {
+      key: Math.random().toString(36).slice(2, 10),
+      kind: isRoot ? "topic" : "subtopic",
+      ...(isRoot ? { topicId: selectedTopic.id } : { subtopicId: selectedTopic.id }),
+      label: selectedTopic.name,
+      available: questions.length,
+    };
+    try {
+      sessionStorage.setItem("kap_exam_prefill", JSON.stringify(draft));
+    } catch {
+      /* storage unavailable — the exam page just starts empty */
+    }
+    router.push("/exams/new");
+  }
+
   return (
     <>
       <PageHeader
@@ -228,6 +243,12 @@ export default function QuestionsPage() {
                   disabled={!selectedId}
                 />
               </div>
+              <Button variant="outline" onClick={() => setAiOpen(true)}>
+                <Sparkles className="size-4" /> Generate with AI
+              </Button>
+              <Button variant="outline" disabled={!selectedId || questions.length === 0} onClick={examFromHere}>
+                <ClipboardList className="size-4" /> Exam from here
+              </Button>
               <Button
                 disabled={!selectedId}
                 onClick={() => {
@@ -252,14 +273,19 @@ export default function QuestionsPage() {
                 text={search ? "No questions match your search." : "No questions here yet."}
                 action={
                   !search ? (
-                    <Button
-                      onClick={() => {
-                        setEditing(undefined);
-                        setEditorOpen(true);
-                      }}
-                    >
-                      <Plus className="size-4" /> Add the first question
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => {
+                          setEditing(undefined);
+                          setEditorOpen(true);
+                        }}
+                      >
+                        <Plus className="size-4" /> Add the first question
+                      </Button>
+                      <Button variant="outline" onClick={() => setAiOpen(true)}>
+                        <Sparkles className="size-4" /> Generate with AI
+                      </Button>
+                    </div>
                   ) : undefined
                 }
               />
@@ -370,6 +396,19 @@ export default function QuestionsPage() {
         confirmLabel="Delete question"
         onConfirm={async () => {
           if (questionToDelete) await deleteQuestion(questionToDelete);
+        }}
+      />
+
+      <AiGenerateDialog
+        open={aiOpen}
+        onOpenChange={setAiOpen}
+        topics={topics}
+        defaultSubtopicId={selectedId}
+        onAdded={(targetId) => {
+          // Refresh the bank so the new set is visible wherever it landed.
+          void loadTopics();
+          if (targetId !== selectedId) setSelectedId(targetId);
+          else if (selectedId) void loadQuestions(selectedId, search);
         }}
       />
     </>

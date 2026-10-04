@@ -76,11 +76,42 @@ no toggle and no stored preference. Enforced with a media-based Tailwind variant
 `Logo` swap (colored mark on light, white mark on dark), so nothing depends on JS
 and there is no flash on load.
 
+## D13 — Topics are the pools; no modules
+
+The "module" collection was removed (schema, API, UI). Exams draw straight
+from topics/subtopics: take N random or hand-pick. One less concept for the
+teacher to maintain; the bank stays the single source of questions.
+
+## D14 — Roster-first, roll-only join
+
+Teacher enters name+roll once per batch. Students join with roll number only;
+the name resolves from the roster. Unknown rolls and rolls outside the exam's
+batch are rejected with a plain-language message. Rejoin after submit returns
+the scored result instead of a raw error.
+
+## D15 — AI question-set generation (server-only)
+
+`POST /api/ai/generate-questions` is a Next.js Route Handler (App Router).
+The Gemini key lives in `process.env` there and never reaches the browser; the
+caller proves teacherhood with their Worker bearer token, verified against
+`/api/auth/me`. Structured JSON output is validated item-by-item with the same
+Zod schemas as hand-written questions; invalid drafts are dropped with warnings.
+Nothing is saved until the teacher approves the set in the review UI. Default
+10, teacher intent in the prompt outranks all defaults. Model and key are env
+(`GEMINI_MODEL`, `GEMINI_API_KEY`); free-tier quotas (15 rpm) are respected by
+design (one call per generation, max 20 questions).
+
+## D16 — Tests
+
+Vitest unit tests for grading/identity/timing (`apps/api/test`), plus
+`apps/api/scripts/e2e.mjs` — a 26-assertion full-loop regression against local
+D1 (run with `pnpm --filter @kap-exam/api test:e2e` while `wrangler dev` runs).
+Browser flows are covered by the agent-browser pass documented in chat, not yet
+by an automated runner.
+
 ## Open / deferred
 
-- Randomization per student (shuffle questions/options) is in the schema but not
-  yet wired into `exam_paper_items` rendering.
+- Print stylesheets for reports (whole-page `window.print()` for now).
 - Realtime teacher monitor UI (DO WebSocket) — the DO stores state; the socket
   transport is next.
-- Print stylesheets for reports.
 - Rate limiting on student join (`KV` is bound, policy not written).

@@ -1,6 +1,6 @@
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Logo, Progress, Toaster, toast } from "@kap-exam/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { codeFromLocation, mediaUrl, studentApi, type JoinData } from "./lib/api";
+import { codeFromLocation, mediaUrl, studentApi, StudentApiError, type JoinData } from "./lib/api";
 
 type Phase = "join" | "exam" | "done";
 
@@ -27,6 +27,7 @@ export default function App() {
   const [answers, setAnswers] = useState<Record<string, { selectedOptionIds: string[]; numericValue: number | null }>>({});
   const [numericDraft, setNumericDraft] = useState("");
   const [result, setResult] = useState<{ score: number; maxScore: number; correct: number; wrong: number; unattempted: number } | null>(null);
+  const [alreadyFinished, setAlreadyFinished] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -124,8 +125,33 @@ export default function App() {
       setClockOffset(data.serverNow - Date.now());
       setIndex(0);
       setName(data.student.name);
+      setAlreadyFinished(false);
       setPhase("exam");
     } catch (err) {
+      // Friendly rejoin: a finished attempt shows its score instead of a raw error.
+      if (err instanceof StudentApiError && (err.code === "already_submitted" || err.code === "attempt_locked")) {
+        const attemptId = err.fields?.attemptId?.[0];
+        if (attemptId) {
+          try {
+            const prev = await studentApi.attempt(attemptId);
+            if (prev.result) {
+              setResult(prev.result);
+              setName(prev.student?.name ?? name);
+              setAlreadyFinished(true);
+              setPhase("done");
+              return;
+            }
+          } catch {
+            /* fall through to the message */
+          }
+        }
+        toast.message(
+          err.code === "attempt_locked"
+            ? "This exam is locked to the device you started on. Please continue there."
+            : "You have already finished this exam. Your answers are with your teacher.",
+        );
+        return;
+      }
       toast.error(err instanceof Error ? err.message : "Could not start");
     } finally {
       setBusy(false);
@@ -184,8 +210,12 @@ export default function App() {
       <main className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center gap-6 p-6">
         <div className="flex flex-col items-center gap-2 text-center">
           <Logo height={30} />
-          <h1 className="text-2xl font-semibold">Submitted</h1>
-          <p className="text-muted-foreground text-sm">Your teacher has your answers.</p>
+          <h1 className="text-2xl font-semibold">{alreadyFinished ? "Already submitted" : "Submitted"}</h1>
+          <p className="text-muted-foreground text-sm">
+            {alreadyFinished
+              ? "You finished this exam earlier — here is your result."
+              : "Your teacher has your answers."}
+          </p>
         </div>
         {result && (
           <Card>

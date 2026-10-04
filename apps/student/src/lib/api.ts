@@ -20,6 +20,20 @@ export interface JoinData {
   answers: Record<string, { selectedOptionIds: string[]; numericValue: number | null }>;
 }
 
+export class StudentApiError extends Error {
+  readonly code: string;
+  readonly status: number;
+  readonly fields?: Record<string, string[]>;
+
+  constructor(message: string, code: string, status: number, fields?: Record<string, string[]>) {
+    super(message);
+    this.name = "StudentApiError";
+    this.code = code;
+    this.status = status;
+    this.fields = fields;
+  }
+}
+
 async function req<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
@@ -27,8 +41,26 @@ async function req<T>(path: string, body?: unknown): Promise<T> {
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
-  const parsed = text ? (JSON.parse(text) as { data?: T; error?: { message?: string } }) : null;
-  if (!res.ok) throw new Error(parsed?.error?.message ?? `Request failed (${res.status})`);
+  const parsed = text
+    ? (JSON.parse(text) as { data?: T; error?: { code?: string; message?: string; fields?: Record<string, string[]> } })
+    : null;
+  if (!res.ok)
+    throw new StudentApiError(
+      parsed?.error?.message ?? `Request failed (${res.status})`,
+      parsed?.error?.code ?? "internal",
+      res.status,
+      parsed?.error?.fields,
+    );
+  return (parsed?.data ?? parsed) as T;
+}
+
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`);
+  const text = await res.text();
+  const parsed = text
+    ? (JSON.parse(text) as { data?: T; error?: { code?: string; message?: string } })
+    : null;
+  if (!res.ok) throw new StudentApiError(parsed?.error?.message ?? `Request failed (${res.status})`, parsed?.error?.code ?? "internal", res.status);
   return (parsed?.data ?? parsed) as T;
 }
 
@@ -44,6 +76,15 @@ export function getDeviceToken(): string {
     localStorage.setItem(KEY, t);
   }
   return t;
+}
+
+export interface AttemptResult {
+  attempt: { id: string; status: string; score: number | null; submittedAt: string | null };
+  exam: { id: string; title: string } | null;
+  student: { name: string; rollNo: string } | null;
+  maxScore: number;
+  answeredCount: number;
+  result: { score: number; maxScore: number; correct: number; wrong: number; unattempted: number } | null;
 }
 
 export const studentApi = {
@@ -71,6 +112,7 @@ export const studentApi = {
     req("/api/attempts/violation", { attemptId, type, occurredAt: Date.now(), detail }).catch(
       () => undefined,
     ),
+  attempt: (attemptId: string) => get<AttemptResult>(`/api/attempts/${attemptId}`),
 };
 
 /** Join code from /j/CODE, ?c=CODE, or manual entry. */
