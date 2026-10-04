@@ -129,7 +129,8 @@ export const topicApi = {
     api.post<Topic>("/api/topics", input),
   update: (id: string, input: Partial<{ name: string; parentId: string | null; position: number }>) =>
     api.patch<Topic>(`/api/topics/${id}`, input),
-  archive: (id: string) => api.del<{ id: string; archived: boolean }>(`/api/topics/${id}`),
+  /** Deletes the topic, its subtopics and their questions. */
+  remove: (id: string) => api.del<{ id: string; topicsDeleted: number }>(`/api/topics/${id}`),
 };
 
 export const questionApi = {
@@ -143,7 +144,7 @@ export const questionApi = {
   },
   create: (input: QuestionInput) => api.post<Question>("/api/questions", input),
   update: (id: string, input: QuestionInput) => api.patch<Question>(`/api/questions/${id}`, input),
-  archive: (id: string) => api.del<{ id: string; archived: boolean }>(`/api/questions/${id}`),
+  remove: (id: string) => api.del<{ id: string; deleted: boolean }>(`/api/questions/${id}`),
 };
 
 export interface ModuleSummary extends QuestionModule {
@@ -158,6 +159,9 @@ export const moduleApi = {
   list: () => api.get<ModuleSummary[]>("/api/modules"),
   create: (input: { name: string; description?: string | null }) =>
     api.post<ModuleSummary>("/api/modules", input),
+  update: (id: string, input: { name?: string; description?: string | null }) =>
+    api.patch<ModuleSummary>(`/api/modules/${id}`, input),
+  remove: (id: string) => api.del<{ id: string; deleted: boolean }>(`/api/modules/${id}`),
   get: (id: string) => api.get<ModuleDetail>(`/api/modules/${id}`),
   addQuestions: (id: string, questionIds: string[]) =>
     api.post<{ moduleId: string; added: number }>(`/api/modules/${id}/questions`, { questionIds }),

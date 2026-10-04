@@ -34,7 +34,7 @@ import {
   Square,
 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
@@ -48,6 +48,7 @@ import {
 
 export default function ExamDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const examId = params.id;
 
   const [exam, setExam] = useState<ExamDetail | null>(null);
@@ -102,7 +103,10 @@ export default function ExamDetailPage() {
     try {
       if (confirm === "publish") {
         await examApi.publish(examId);
-        toast.success("Exam published — share the link");
+        toast.success("Exam published — showing the join code");
+        setConfirm(null);
+        router.push(`/host/${examId}`);
+        return;
       } else {
         await examApi.close(examId);
         toast.success("Exam closed");
@@ -150,6 +154,11 @@ export default function ExamDetailPage() {
             )}
             {exam?.status === "published" && (
               <>
+                <Button size="sm" asChild>
+                  <Link href={`/host/${exam.id}`}>
+                    <Radio className="size-4" /> Display
+                  </Link>
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
                   <Share2 className="size-4" /> Share
                 </Button>

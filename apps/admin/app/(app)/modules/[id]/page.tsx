@@ -21,10 +21,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageBody, PageHeader } from "@/components/page-header";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { NameDialog } from "@/components/name-dialog";
 import { QUESTION_TYPE_LABELS } from "@/lib/question-form";
-import { ArrowLeft, Loader2, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, Loader2, MoreHorizontal, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -38,11 +47,14 @@ import type { Question, Topic } from "@kap-exam/shared";
 
 export default function ModuleDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const moduleId = params.id;
 
   const [module, setModule] = useState<ModuleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +86,28 @@ export default function ModuleDetailPage() {
     }
   }
 
+  async function rename(name: string) {
+    if (!module) return;
+    try {
+      await moduleApi.update(module.id, { name });
+      setModule({ ...module, name });
+      toast.success("Renamed");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Could not rename");
+    }
+  }
+
+  async function removeModule() {
+    if (!module) return;
+    try {
+      await moduleApi.remove(module.id);
+      toast.success("Module deleted");
+      router.push("/modules");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Could not delete");
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -89,6 +123,22 @@ export default function ModuleDetailPage() {
             <Button size="sm" onClick={() => setAddOpen(true)} disabled={!module}>
               <Plus className="size-4" /> Add questions
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="size-9" disabled={!module}>
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setRenaming(true)}>
+                  <Pencil /> Rename
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}>
+                  <Trash2 /> Delete module
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         }
       />
@@ -143,13 +193,32 @@ export default function ModuleDetailPage() {
       </PageBody>
 
       {module && (
-        <AddQuestionsDialog
-          open={addOpen}
-          onOpenChange={setAddOpen}
-          moduleId={module.id}
-          existingIds={module.questions.map((q) => q.id)}
-          onAdded={() => void load()}
-        />
+        <>
+          <AddQuestionsDialog
+            open={addOpen}
+            onOpenChange={setAddOpen}
+            moduleId={module.id}
+            existingIds={module.questions.map((q) => q.id)}
+            onAdded={() => void load()}
+          />
+          <NameDialog
+            open={renaming}
+            onOpenChange={setRenaming}
+            title="Rename module"
+            label="Module name"
+            initialName={module.name}
+            submitLabel="Rename"
+            onSubmit={rename}
+          />
+          <ConfirmDialog
+            open={deleting}
+            onOpenChange={setDeleting}
+            title={`Delete “${module.name}”?`}
+            description="The module is removed. The questions themselves stay in the question bank."
+            confirmLabel="Delete module"
+            onConfirm={removeModule}
+          />
+        </>
       )}
     </>
   );

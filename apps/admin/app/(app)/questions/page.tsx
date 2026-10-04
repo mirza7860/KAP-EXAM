@@ -5,30 +5,37 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { NameDialog } from "@/components/name-dialog";
+import { QuestionEditor } from "@/components/question-editor";
+import { PageBody, PageHeader } from "@/components/page-header";
+import { QUESTION_TYPE_LABELS } from "@/lib/question-form";
+import { cn } from "@/lib/utils";
 import {
   ChevronRight,
-  FolderPlus,
   Loader2,
+  MoreHorizontal,
   Pencil,
   Plus,
   Search,
   Trash2,
-  TriangleAlert,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { QuestionEditor } from "@/components/question-editor";
-import { PageBody, PageHeader } from "@/components/page-header";
-import { QUESTION_TYPE_LABELS } from "@/lib/question-form";
 import { ApiError, questionApi, topicApi } from "@/lib/api";
+
+type NameDialogState =
+  | { mode: "root" }
+  | { mode: "child"; parentId: string }
+  | { mode: "rename"; topic: Topic }
+  | null;
 
 export default function QuestionsPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -41,10 +48,9 @@ export default function QuestionsPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Question | undefined>(undefined);
 
-  const [newTopic, setNewTopic] = useState("");
-  const [addingChildOf, setAddingChildOf] = useState<string | null>(null);
-  const [newChild, setNewChild] = useState("");
-  const [pendingArchive, setPendingArchive] = useState<Question | null>(null);
+  const [nameDialog, setNameDialog] = useState<NameDialogState>(null);
+  const [topicToDelete, setTopicToDelete] = useState<Topic | null>(null);
+  const [questionToDelete, setQuestionToDelete] = useState<Question | null>(null);
 
   const roots = useMemo(() => topics.filter((topic) => topic.parentId === null), [topics]);
   const childrenOf = useCallback(
@@ -58,7 +64,9 @@ export default function QuestionsPage() {
     try {
       const list = await topicApi.list();
       setTopics(list);
-      setSelectedId((current) => current ?? list.find((t) => t.parentId !== null)?.id ?? list[0]?.id ?? null);
+      setSelectedId(
+        (current) => current ?? list.find((t) => t.parentId !== null)?.id ?? list[0]?.id ?? null,
+      );
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Could not load topics");
     } finally {
@@ -89,32 +97,49 @@ export default function QuestionsPage() {
     void loadQuestions(selectedId, search);
   }, [selectedId, search, loadQuestions]);
 
-  async function createTopic(parentId: string | null, name: string) {
-    if (!name.trim()) return;
+  async function handleNameSubmit(name: string) {
+    if (!nameDialog) return;
     try {
-      const topic = await topicApi.create({ name: name.trim(), parentId });
-      setTopics((current) => [...current, topic]);
-      if (parentId === null) setNewTopic("");
-      else {
-        setNewChild("");
-        setAddingChildOf(null);
+      if (nameDialog.mode === "root") {
+        const topic = await topicApi.create({ name, parentId: null });
+        setTopics((current) => [...current, topic]);
         setSelectedId(topic.id);
+        toast.success("Topic created");
+      } else if (nameDialog.mode === "child") {
+        const topic = await topicApi.create({ name, parentId: nameDialog.parentId });
+        setTopics((current) => [...current, topic]);
+        setSelectedId(topic.id);
+        toast.success("Subtopic created");
+      } else {
+        const updated = await topicApi.update(nameDialog.topic.id, { name });
+        setTopics((current) => current.map((t) => (t.id === updated.id ? updated : t)));
+        toast.success("Renamed");
       }
-      toast.success(parentId ? "Subtopic added" : "Topic added");
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Could not add topic");
+      toast.error(error instanceof ApiError ? error.message : "Something went wrong");
     }
   }
 
-  async function archiveQuestion(question: Question) {
+  async function deleteTopic(topic: Topic) {
     try {
-      await questionApi.archive(question.id);
-      setQuestions((current) => current.filter((item) => item.id !== question.id));
-      toast.success("Question archived");
+      await topicApi.remove(topic.id);
+      setTopics((current) =>
+        current.filter((t) => t.id !== topic.id && t.parentId !== topic.id),
+      );
+      if (selectedId === topic.id) setSelectedId(null);
+      toast.success("Topic deleted");
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Could not archive");
-    } finally {
-      setPendingArchive(null);
+      toast.error(error instanceof ApiError ? error.message : "Could not delete");
+    }
+  }
+
+  async function deleteQuestion(question: Question) {
+    try {
+      await questionApi.remove(question.id);
+      setQuestions((current) => current.filter((item) => item.id !== question.id));
+      toast.success("Question deleted");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Could not delete");
     }
   }
 
@@ -122,77 +147,55 @@ export default function QuestionsPage() {
     <>
       <PageHeader
         title="Question bank"
-        description="Organise by topic and subtopic. Reuse the same questions across exams."
+        description="Questions live in topics and subtopics. Reuse them in any exam."
       />
       <div className="flex flex-1 overflow-hidden">
-        {/* Topics */}
+        {/* Topics tree */}
         <aside className="bg-card/30 flex w-72 shrink-0 flex-col border-r">
-          <div className="border-b px-4 py-3">
+          <div className="flex items-center justify-between border-b px-4 py-3">
             <p className="text-sm font-medium">Topics</p>
+            <Button size="sm" variant="ghost" onClick={() => setNameDialog({ mode: "root" })}>
+              <Plus className="size-4" /> New
+            </Button>
           </div>
-          <div className="flex-1 overflow-y-auto p-3">
+          <div className="flex-1 overflow-y-auto p-2">
             {loadingTopics ? (
               <div className="text-muted-foreground flex items-center gap-2 px-2 py-4 text-sm">
                 <Loader2 className="size-4 animate-spin" /> Loading…
               </div>
             ) : roots.length === 0 ? (
-              <p className="text-muted-foreground px-2 py-4 text-sm">
-                No topics yet. Add your first topic below.
-              </p>
+              <div className="flex flex-col items-center gap-3 px-3 py-10 text-center">
+                <p className="text-muted-foreground text-sm">
+                  No topics yet. Start by naming a topic, e.g. “Algebra”.
+                </p>
+                <Button size="sm" onClick={() => setNameDialog({ mode: "root" })}>
+                  <Plus className="size-4" /> Create a topic
+                </Button>
+              </div>
             ) : (
               <ul className="space-y-0.5">
                 {roots.map((root) => (
                   <li key={root.id}>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setSelectedId(root.id)}
-                        className={cnRow(selectedId === root.id)}
-                      >
-                        <span className="truncate">{root.name}</span>
-                      </button>
-                      <button
-                        title="Add subtopic"
-                        onClick={() => {
-                          setAddingChildOf((current) => (current === root.id ? null : root.id));
-                          setNewChild("");
-                        }}
-                        className="text-muted-foreground hover:text-foreground hover:bg-accent rounded-md p-1.5 transition-colors"
-                      >
-                        <Plus className="size-3.5" />
-                      </button>
-                    </div>
-
-                    {addingChildOf === root.id && (
-                      <form
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          void createTopic(root.id, newChild);
-                        }}
-                        className="mt-1 mb-1 ml-3 flex gap-1"
-                      >
-                        <Input
-                          autoFocus
-                          value={newChild}
-                          onChange={(e) => setNewChild(e.target.value)}
-                          placeholder="Subtopic name"
-                          className="h-8"
-                        />
-                        <Button type="submit" size="sm" className="h-8 px-2">
-                          Add
-                        </Button>
-                      </form>
-                    )}
-
+                    <TopicRow
+                      topic={root}
+                      active={selectedId === root.id}
+                      onSelect={() => setSelectedId(root.id)}
+                      onAddChild={() => setNameDialog({ mode: "child", parentId: root.id })}
+                      onRename={() => setNameDialog({ mode: "rename", topic: root })}
+                      onDelete={() => setTopicToDelete(root)}
+                    />
                     <ul className="mt-0.5 space-y-0.5">
                       {childrenOf(root.id).map((child) => (
                         <li key={child.id}>
-                          <button
-                            onClick={() => setSelectedId(child.id)}
-                            className={cnChild(selectedId === child.id)}
-                          >
-                            <ChevronRight className="size-3 shrink-0 opacity-50" />
-                            <span className="truncate">{child.name}</span>
-                          </button>
+                          <TopicRow
+                            topic={child}
+                            child
+                            active={selectedId === child.id}
+                            onSelect={() => setSelectedId(child.id)}
+                            onAddChild={() => setNameDialog({ mode: "child", parentId: child.id })}
+                            onRename={() => setNameDialog({ mode: "rename", topic: child })}
+                            onDelete={() => setTopicToDelete(child)}
+                          />
                         </li>
                       ))}
                     </ul>
@@ -201,24 +204,6 @@ export default function QuestionsPage() {
               </ul>
             )}
           </div>
-
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void createTopic(null, newTopic);
-            }}
-            className="flex gap-1 border-t p-3"
-          >
-            <Input
-              value={newTopic}
-              onChange={(e) => setNewTopic(e.target.value)}
-              placeholder="New topic"
-              className="h-8"
-            />
-            <Button type="submit" size="sm" className="h-8 px-2" disabled={!newTopic.trim()}>
-              <FolderPlus className="size-4" />
-            </Button>
-          </form>
         </aside>
 
         {/* Questions */}
@@ -226,7 +211,7 @@ export default function QuestionsPage() {
           <div className="flex items-center justify-between gap-4 border-b px-6 py-3">
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">
-                {selectedTopic ? selectedTopic.name : "Select a subtopic"}
+                {selectedTopic ? selectedTopic.name : "Select a topic"}
               </p>
               <p className="text-muted-foreground text-xs">
                 {questions.length} question{questions.length === 1 ? "" : "s"}
@@ -239,7 +224,8 @@ export default function QuestionsPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search"
-                  className="h-9 w-48 pl-8"
+                  className="h-9 w-44 pl-8"
+                  disabled={!selectedId}
                 />
               </div>
               <Button
@@ -256,30 +242,32 @@ export default function QuestionsPage() {
 
           <PageBody>
             {!selectedId ? (
-              <EmptyState text="Pick a subtopic on the left, or create one, to see its questions." />
+              <EmptyState text="Pick a topic or subtopic on the left to see its questions." />
             ) : loadingQuestions ? (
               <div className="text-muted-foreground flex items-center gap-2 text-sm">
                 <Loader2 className="size-4 animate-spin" /> Loading questions…
               </div>
             ) : questions.length === 0 ? (
               <EmptyState
-                text="No questions here yet."
+                text={search ? "No questions match your search." : "No questions here yet."}
                 action={
-                  <Button
-                    onClick={() => {
-                      setEditing(undefined);
-                      setEditorOpen(true);
-                    }}
-                  >
-                    <Plus className="size-4" /> Add the first question
-                  </Button>
+                  !search ? (
+                    <Button
+                      onClick={() => {
+                        setEditing(undefined);
+                        setEditorOpen(true);
+                      }}
+                    >
+                      <Plus className="size-4" /> Add the first question
+                    </Button>
+                  ) : undefined
                 }
               />
             ) : (
               <ul className="space-y-3">
                 {questions.map((question) => (
                   <li key={question.id}>
-                    <Card className="gap-3 py-4">
+                    <Card className="gap-0 py-4 transition-colors hover:border-primary/40">
                       <div className="flex items-start justify-between gap-4 px-5">
                         <div className="min-w-0 space-y-1.5">
                           <div className="flex flex-wrap items-center gap-2">
@@ -291,25 +279,30 @@ export default function QuestionsPage() {
                           </div>
                           <p className="line-clamp-2 text-sm">{question.prompt}</p>
                         </div>
-                        <div className="flex shrink-0 gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditing(question);
-                              setEditorOpen(true);
-                            }}
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setPendingArchive(question)}
-                          >
-                            <Trash2 className="text-destructive size-4" />
-                          </Button>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="shrink-0">
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                setEditing(question);
+                                setEditorOpen(true);
+                              }}
+                            >
+                              <Pencil /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={() => setQuestionToDelete(question)}
+                            >
+                              <Trash2 /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </Card>
                   </li>
@@ -326,57 +319,119 @@ export default function QuestionsPage() {
           onOpenChange={setEditorOpen}
           subtopicId={selectedId}
           initial={editing}
-          onSaved={(saved) => {
-            setQuestions((current) => {
-              const exists = current.some((item) => item.id === saved.id);
-              return exists ? current.map((item) => (item.id === saved.id ? saved : item)) : [saved, ...current];
-            });
-          }}
+          onSaved={(saved) =>
+            setQuestions((current) =>
+              current.some((item) => item.id === saved.id)
+                ? current.map((item) => (item.id === saved.id ? saved : item))
+                : [saved, ...current],
+            )
+          }
         />
       )}
 
-      <Dialog open={Boolean(pendingArchive)} onOpenChange={(open) => !open && setPendingArchive(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Archive this question?</DialogTitle>
-            <DialogDescription>
-              It disappears from the bank but stays attached to exams already given, so past reports never
-              change.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setPendingArchive(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => pendingArchive && void archiveQuestion(pendingArchive)}
-            >
-              <TriangleAlert className="size-4" /> Archive
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <NameDialog
+        open={nameDialog !== null}
+        onOpenChange={(open) => !open && setNameDialog(null)}
+        title={
+          nameDialog?.mode === "root"
+            ? "New topic"
+            : nameDialog?.mode === "child"
+              ? "New subtopic"
+              : "Rename"
+        }
+        description={
+          nameDialog?.mode === "child"
+            ? "Subtopics sit under a topic and hold the questions."
+            : undefined
+        }
+        label={nameDialog?.mode === "child" ? "Subtopic name" : "Topic name"}
+        placeholder="e.g. Linear equations"
+        initialName={nameDialog?.mode === "rename" ? nameDialog.topic.name : ""}
+        submitLabel={nameDialog?.mode === "rename" ? "Rename" : "Create"}
+        onSubmit={handleNameSubmit}
+      />
+
+      <ConfirmDialog
+        open={topicToDelete !== null}
+        onOpenChange={(open) => !open && setTopicToDelete(null)}
+        title={`Delete “${topicToDelete?.name}”?`}
+        description="This removes the topic, its subtopics and every question inside them. Exams already given keep their own copy, so past report cards are safe."
+        confirmLabel="Delete topic"
+        onConfirm={async () => {
+          if (topicToDelete) await deleteTopic(topicToDelete);
+        }}
+      />
+
+      <ConfirmDialog
+        open={questionToDelete !== null}
+        onOpenChange={(open) => !open && setQuestionToDelete(null)}
+        title="Delete this question?"
+        description="It disappears from the bank. Exams already given keep their own copy."
+        confirmLabel="Delete question"
+        onConfirm={async () => {
+          if (questionToDelete) await deleteQuestion(questionToDelete);
+        }}
+      />
     </>
   );
 }
 
-function cnRow(active: boolean) {
-  return [
-    "flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors",
-    active
-      ? "bg-primary/10 text-primary"
-      : "text-foreground hover:bg-accent hover:text-accent-foreground",
-  ].join(" ");
-}
-
-function cnChild(active: boolean) {
-  return [
-    "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 pl-4 text-left text-sm transition-colors",
-    active
-      ? "bg-primary/10 text-primary"
-      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-  ].join(" ");
+function TopicRow({
+  topic,
+  child = false,
+  active,
+  onSelect,
+  onAddChild,
+  onRename,
+  onDelete,
+}: {
+  topic: Topic;
+  child?: boolean;
+  active: boolean;
+  onSelect: () => void;
+  onAddChild: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="group flex items-center gap-1">
+      <button
+        onClick={onSelect}
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+          child && "pl-4",
+          active
+            ? "bg-primary/10 text-primary font-medium"
+            : "hover:bg-accent hover:text-accent-foreground",
+        )}
+      >
+        {child && <ChevronRight className="size-3 shrink-0 opacity-50" />}
+        <span className="truncate">{topic.name}</span>
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="text-muted-foreground hover:text-foreground hover:bg-accent rounded-md p-1.5 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
+            aria-label={`Options for ${topic.name}`}
+          >
+            <MoreHorizontal className="size-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={onAddChild}>
+            <Plus /> Add subtopic
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onRename}>
+            <Pencil /> Rename
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+            <Trash2 /> Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
 }
 
 function EmptyState({ text, action }: { text: string; action?: ReactNode }) {

@@ -1,4 +1,4 @@
-import { schema } from "@kap-exam/db";
+import { schema, type Database } from "@kap-exam/db";
 import {
   moduleInputSchema,
   moduleQuestionsInputSchema,
@@ -20,6 +20,36 @@ import { deserializeQuestion, serializeQuestion } from "../lib/question.js";
 
 function fields(error: { flatten: () => { fieldErrors: unknown } }) {
   return error.flatten().fieldErrors as Record<string, string[]>;
+}
+
+/**
+ * Delete a topic, its subtopics, and every question inside them.
+ *
+ * This is a real delete, not an archive: exams snapshot their questions into
+ * `exam_paper_items`, so removing a question from the bank can never rewrite a
+ * past report card.
+ */
+async function deleteTopicSubtree(db: Database, rootId: string): Promise<number> {
+  const rows = await db
+    .select({ id: schema.topics.id, parentId: schema.topics.parentId })
+    .from(schema.topics);
+
+  const ids = new Set<string>([rootId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const row of rows) {
+      if (row.parentId && ids.has(row.parentId) && !ids.has(row.id)) {
+        ids.add(row.id);
+        changed = true;
+      }
+    }
+  }
+
+  const list = [...ids];
+  await db.delete(schema.questions).where(inArray(schema.questions.subtopicId, list));
+  await db.delete(schema.topics).where(inArray(schema.topics.id, list));
+  return list.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -77,12 +107,8 @@ topicRoutes.patch("/:id", async (c) => {
 });
 
 topicRoutes.delete("/:id", async (c) => {
-  const db = c.get("db");
-  await db
-    .update(schema.topics)
-    .set({ archivedAt: new Date() })
-    .where(eq(schema.topics.id, c.req.param("id")));
-  return c.json({ data: { id: c.req.param("id"), archived: true } });
+  const deleted = await deleteTopicSubtree(c.get("db"), c.req.param("id"));
+  return c.json({ data: { id: c.req.param("id"), topicsDeleted: deleted } });
 });
 
 // ---------------------------------------------------------------------------
@@ -186,12 +212,8 @@ questionRoutes.patch("/:id", async (c) => {
 });
 
 questionRoutes.delete("/:id", async (c) => {
-  await c
-    .get("db")
-    .update(schema.questions)
-    .set({ archivedAt: new Date() })
-    .where(eq(schema.questions.id, c.req.param("id")));
-  return c.json({ data: { id: c.req.param("id"), archived: true } });
+  await c.get("db").delete(schema.questions).where(eq(schema.questions.id, c.req.param("id")));
+  return c.json({ data: { id: c.req.param("id"), deleted: true } });
 });
 
 // ---------------------------------------------------------------------------
@@ -285,10 +307,9 @@ moduleRoutes.patch("/:id", async (c) => {
 moduleRoutes.delete("/:id", async (c) => {
   await c
     .get("db")
-    .update(schema.questionModules)
-    .set({ archivedAt: new Date() })
+    .delete(schema.questionModules)
     .where(eq(schema.questionModules.id, c.req.param("id")));
-  return c.json({ data: { id: c.req.param("id"), archived: true } });
+  return c.json({ data: { id: c.req.param("id"), deleted: true } });
 });
 
 moduleRoutes.post("/:id/questions", async (c) => {
