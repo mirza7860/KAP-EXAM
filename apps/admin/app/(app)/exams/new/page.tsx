@@ -13,8 +13,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageBody, PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 import { PaperBuilder, type SourceDraft } from "@/components/paper-builder";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, ClipboardList, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -124,29 +125,50 @@ export default function NewExamPage() {
     }
   }
 
+  const totalQuestions = sources.reduce((sum, s) => sum + (s.count ?? s.available), 0);
+
   return (
     <>
       <PageHeader
         title="Create exam"
         description="Details and questions in one pass."
         actions={
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/exams">
-              <ArrowLeft className="size-4" /> All exams
-            </Link>
-          </Button>
+          <div className="flex items-center gap-3">
+            <div
+              className="border-border/80 flex items-baseline gap-1.5 rounded-full border px-3 py-1.5"
+              title="Total questions in this paper"
+            >
+              <span
+                className={`stat-figure text-base${totalQuestions === 0 ? " text-muted-foreground" : ""}`}
+              >
+                {totalQuestions}
+              </span>
+              <span className="eyebrow">questions</span>
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/exams">
+                <ArrowLeft className="size-4" /> All exams
+              </Link>
+            </Button>
+            <Button size="sm" onClick={() => void onSubmit()} disabled={creating || sources.length === 0}>
+              {creating && <Loader2 className="size-4 animate-spin" />}
+              Create exam
+            </Button>
+          </div>
         }
       />
       <PageBody>
         {batches.length === 0 ? (
-          <div className="border-border flex flex-col items-center gap-3 rounded-xl border border-dashed py-16 text-center">
-            <p className="text-muted-foreground text-sm">
-              You need a batch first — every exam belongs to a batch.
-            </p>
-            <Button asChild>
-              <Link href="/batches">Go to batches</Link>
-            </Button>
-          </div>
+          <EmptyState
+            icon={<ClipboardList className="size-5" />}
+            title="Create a batch first"
+            description="Every exam belongs to a batch — the group of students who sit it."
+            action={
+              <Button asChild>
+                <Link href="/batches">Go to batches</Link>
+              </Button>
+            }
+          />
         ) : (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_1fr]">
             <Card className="h-fit">
@@ -237,10 +259,6 @@ export default function NewExamPage() {
               </CardHeader>
               <CardContent className="space-y-5">
                 <PaperBuilder sources={sources} onChange={setSources} />
-                <Button className="w-full" onClick={() => void onSubmit()} disabled={creating}>
-                  {creating && <Loader2 className="size-4 animate-spin" />}
-                  Create exam
-                </Button>
               </CardContent>
             </Card>
           </div>

@@ -1,12 +1,14 @@
 /*
  * KAP EXAM design tokens — shared by the admin app and the student PWA.
  *
- * Warm palette. Tailwind v4 is CSS-first: this file is the single source of
- * truth for colour, radius and motion. Both apps `@import` it so they cannot
- * drift apart.
+ * Direction: WARM EDITORIAL. The palette is cream/espresso; the type pairs a
+ * characterful display serif (headings, big numbers) with a neutral UI sans and
+ * a mono for roll numbers / join codes. One restrained accent. Tailwind v4 is
+ * CSS-first: this file is the single source of truth for colour, type, radius
+ * and motion, so the two apps cannot drift apart.
  *
- * Theme policy: SYSTEM ONLY. Light and dark are selected by
- * `prefers-color-scheme`; there is no toggle and nothing is persisted.
+ * Theme policy: SYSTEM ONLY. Light and dark come from `prefers-color-scheme`;
+ * there is no toggle and nothing is persisted.
  */
 
 @custom-variant dark (@media (prefers-color-scheme: dark));
@@ -14,76 +16,86 @@
 :root {
   color-scheme: light dark;
 
-  --radius: 0.625rem;
+  --radius: 0.75rem;
+
+  /* Type roles. Apps bind --type-display / --type-sans / --type-mono to real
+     faces; these are the fallbacks so nothing renders unstyled. */
+  --type-display:
+    "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
+  --type-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --type-mono:
+    ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   /* Light: warm cream paper with an espresso foreground. */
   --background: oklch(0.985 0.008 84);
   --foreground: oklch(0.24 0.02 55);
-  --card: oklch(0.995 0.005 84);
+  --card: oklch(0.998 0.003 84);
   --card-foreground: oklch(0.24 0.02 55);
-  --popover: oklch(0.995 0.005 84);
+  --popover: oklch(0.998 0.003 84);
   --popover-foreground: oklch(0.24 0.02 55);
 
-  /* Primary: terracotta / amber. The brand warmth lives here. */
-  --primary: oklch(0.58 0.15 48);
+  /* Primary: terracotta. Used sparingly — actions, active, key numbers. */
+  --primary: oklch(0.55 0.15 45);
   --primary-foreground: oklch(0.99 0.012 84);
   --secondary: oklch(0.95 0.022 80);
   --secondary-foreground: oklch(0.3 0.03 55);
-  --muted: oklch(0.955 0.016 82);
-  --muted-foreground: oklch(0.52 0.032 60);
+  --muted: oklch(0.958 0.014 82);
+  --muted-foreground: oklch(0.5 0.03 60);
   --accent: oklch(0.93 0.045 78);
   --accent-foreground: oklch(0.3 0.04 55);
-  --destructive: oklch(0.58 0.2 27);
+  --destructive: oklch(0.55 0.2 27);
   --destructive-foreground: oklch(0.99 0 0);
 
-  --border: oklch(0.905 0.02 78);
-  --input: oklch(0.905 0.02 78);
-  --ring: oklch(0.58 0.15 48);
+  --border: oklch(0.9 0.018 78);
+  --input: oklch(0.9 0.018 78);
+  --ring: oklch(0.55 0.15 45);
 
-  /* Sidebar (shadcn sidebar component) — warm, a touch deeper than the page. */
-  --sidebar: oklch(0.972 0.012 82);
+  /* Sidebar — same paper, quieter, separated by a hairline not a box. */
+  --sidebar: oklch(0.968 0.012 82);
   --sidebar-foreground: oklch(0.24 0.02 55);
-  --sidebar-primary: oklch(0.58 0.15 48);
+  --sidebar-primary: oklch(0.55 0.15 45);
   --sidebar-primary-foreground: oklch(0.99 0.012 84);
-  --sidebar-accent: oklch(0.93 0.045 78);
+  --sidebar-accent: oklch(0.925 0.04 78);
   --sidebar-accent-foreground: oklch(0.3 0.04 55);
-  --sidebar-border: oklch(0.9 0.02 78);
-  --sidebar-ring: oklch(0.58 0.15 48);
+  --sidebar-border: oklch(0.895 0.018 78);
+  --sidebar-ring: oklch(0.55 0.15 45);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     /* Dark: warm espresso charcoal, never a cold blue-grey. */
-    --background: oklch(0.2 0.014 55);
+    --background: oklch(0.19 0.014 55);
     --foreground: oklch(0.96 0.012 84);
-    --card: oklch(0.24 0.016 55);
+    --card: oklch(0.235 0.016 55);
     --card-foreground: oklch(0.96 0.012 84);
-    --popover: oklch(0.24 0.016 55);
+    --popover: oklch(0.235 0.016 55);
     --popover-foreground: oklch(0.96 0.012 84);
 
-    --primary: oklch(0.77 0.13 68);
+    --primary: oklch(0.78 0.13 68);
     --primary-foreground: oklch(0.22 0.03 50);
-    --secondary: oklch(0.29 0.016 55);
+    --secondary: oklch(0.28 0.016 55);
     --secondary-foreground: oklch(0.96 0.012 84);
-    --muted: oklch(0.29 0.016 55);
-    --muted-foreground: oklch(0.73 0.024 74);
-    --accent: oklch(0.33 0.024 60);
+    --muted: oklch(0.28 0.016 55);
+    --muted-foreground: oklch(0.72 0.024 74);
+    --accent: oklch(0.32 0.024 60);
     --accent-foreground: oklch(0.96 0.012 84);
     --destructive: oklch(0.66 0.19 25);
     --destructive-foreground: oklch(0.99 0 0);
 
     --border: oklch(0.98 0.02 80 / 12%);
     --input: oklch(0.98 0.02 80 / 16%);
-    --ring: oklch(0.77 0.13 68);
+    --ring: oklch(0.78 0.13 68);
 
-    --sidebar: oklch(0.18 0.014 55);
+    --sidebar: oklch(0.17 0.014 55);
     --sidebar-foreground: oklch(0.96 0.012 84);
-    --sidebar-primary: oklch(0.77 0.13 68);
+    --sidebar-primary: oklch(0.78 0.13 68);
     --sidebar-primary-foreground: oklch(0.22 0.03 50);
-    --sidebar-accent: oklch(0.29 0.016 55);
+    --sidebar-accent: oklch(0.28 0.016 55);
     --sidebar-accent-foreground: oklch(0.96 0.012 84);
-    --sidebar-border: oklch(0.98 0.02 80 / 12%);
-    --sidebar-ring: oklch(0.77 0.13 68);
+    --sidebar-border: oklch(0.98 0.02 80 / 10%);
+    --sidebar-ring: oklch(0.78 0.13 68);
   }
 }
 
@@ -117,6 +129,10 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  --font-sans: var(--type-sans);
+  --font-mono: var(--type-mono);
+  --font-display: var(--type-display);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -133,11 +149,48 @@
     border-color: var(--border);
   }
 
+  html {
+    text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);
+    font-family: var(--type-sans);
     -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    background-color: color-mix(in oklch, var(--primary) 24%, transparent);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--type-display);
+    font-optical-sizing: auto;
+    letter-spacing: -0.021em;
+  }
+
+  /* A calm, warm scrollbar; no chrome shouting over the content. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 22%, transparent) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklch, var(--foreground) 18%, transparent);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, var(--foreground) 30%, transparent);
   }
 
   /* Motion is a courtesy, not a requirement. */
@@ -150,5 +203,80 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+}
+
+/*
+ * A small shared vocabulary. Used across both apps so spacing and type stop
+ * being re-decided per screen — that inconsistency is what reads as "untrained".
+ */
+@layer components {
+  /* Uppercase micro-label. Use sparingly: section labels, table heads. */
+  .eyebrow {
+    font-family: var(--type-sans);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  /* Display type for page titles and hero numbers. */
+  .display {
+    font-family: var(--type-display);
+    font-optical-sizing: auto;
+    letter-spacing: -0.021em;
+    line-height: 1.08;
+  }
+
+  /* Big numeric facts: display face, tabular, slightly tightened. */
+  .stat-figure {
+    font-family: var(--type-display);
+    font-optical-sizing: auto;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+
+  /* Hairline separator that reads as a printed rule, not a border box. */
+  .rule {
+    border-top: 1px solid var(--border);
+  }
+
+  /* Page content enters quietly. Transform+opacity only; never blocks input. */
+  .enter-rise {
+    animation: enter-rise 420ms var(--ease-out-strong) both;
+  }
+  @keyframes enter-rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .stagger > * {
+    animation: enter-rise 400ms var(--ease-out-strong) both;
+  }
+  .stagger > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger > *:nth-child(2) {
+    animation-delay: 45ms;
+  }
+  .stagger > *:nth-child(3) {
+    animation-delay: 90ms;
+  }
+  .stagger > *:nth-child(4) {
+    animation-delay: 135ms;
+  }
+  .stagger > *:nth-child(5) {
+    animation-delay: 180ms;
+  }
+  .stagger > *:nth-child(6) {
+    animation-delay: 225ms;
   }
 }

@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AiGenerateDialog } from "@/components/ai-generate-dialog";
+import { EmptyState } from "@/components/empty-state";
 import { NameDialog } from "@/components/name-dialog";
 import { QuestionEditor } from "@/components/question-editor";
 import { PageBody, PageHeader } from "@/components/page-header";
@@ -21,7 +22,7 @@ import { QUESTION_TYPE_LABELS } from "@/lib/question-form";
 import { cn } from "@/lib/utils";
 import { ChevronRight, ClipboardList, Loader2, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ApiError, questionApi, topicApi } from "@/lib/api";
 
@@ -140,15 +141,21 @@ export default function QuestionsPage() {
   }
 
   /** One click from the bank to an exam draft prefilled with this pool. */
-  function examFromHere() {
-    if (!selectedTopic) return;
-    const isRoot = selectedTopic.parentId === null;
+  async function examFromHere(topic: Topic) {
+    const isRoot = topic.parentId === null;
+    let available = 0;
+    try {
+      const counts = await topicApi.counts();
+      available = counts.subtree[topic.id] ?? 0;
+    } catch {
+      /* leave 0 — the exam page still works, it just won't show a pool size */
+    }
     const draft = {
       key: Math.random().toString(36).slice(2, 10),
       kind: isRoot ? "topic" : "subtopic",
-      ...(isRoot ? { topicId: selectedTopic.id } : { subtopicId: selectedTopic.id }),
-      label: selectedTopic.name,
-      available: questions.length,
+      ...(isRoot ? { topicId: topic.id } : { subtopicId: topic.id }),
+      label: topic.name,
+      available,
     };
     try {
       sessionStorage.setItem("kap_exam_prefill", JSON.stringify(draft));
@@ -197,6 +204,7 @@ export default function QuestionsPage() {
                       onSelect={() => setSelectedId(root.id)}
                       onAddChild={() => setNameDialog({ mode: "child", parentId: root.id })}
                       onRename={() => setNameDialog({ mode: "rename", topic: root })}
+                      onExamFromTopic={() => void examFromHere(root)}
                       onDelete={() => setTopicToDelete(root)}
                     />
                     <ul className="mt-0.5 space-y-0.5">
@@ -209,6 +217,7 @@ export default function QuestionsPage() {
                             onSelect={() => setSelectedId(child.id)}
                             onAddChild={() => setNameDialog({ mode: "child", parentId: child.id })}
                             onRename={() => setNameDialog({ mode: "rename", topic: child })}
+                            onExamFromTopic={() => void examFromHere(child)}
                             onDelete={() => setTopicToDelete(child)}
                           />
                         </li>
@@ -246,9 +255,6 @@ export default function QuestionsPage() {
               <Button variant="outline" onClick={() => setAiOpen(true)}>
                 <Sparkles className="size-4" /> Generate with AI
               </Button>
-              <Button variant="outline" disabled={!selectedId || questions.length === 0} onClick={examFromHere}>
-                <ClipboardList className="size-4" /> Exam from here
-              </Button>
               <Button
                 disabled={!selectedId}
                 onClick={() => {
@@ -263,29 +269,37 @@ export default function QuestionsPage() {
 
           <PageBody>
             {!selectedId ? (
-              <EmptyState text="Pick a topic or subtopic on the left to see its questions." />
+              <EmptyState
+                title="Pick a topic"
+                description="Choose a topic or subtopic on the left to see its questions."
+              />
             ) : loadingQuestions ? (
               <div className="text-muted-foreground flex items-center gap-2 text-sm">
                 <Loader2 className="size-4 animate-spin" /> Loading questions…
               </div>
             ) : questions.length === 0 ? (
               <EmptyState
-                text={search ? "No questions match your search." : "No questions here yet."}
+                title={search ? "No matches" : "Nothing here yet"}
+                description={
+                  search
+                    ? "No questions match your search in this subtopic."
+                    : "Add questions by hand, or let AI draft a set you can review."
+                }
                 action={
                   !search ? (
-                    <div className="flex gap-2">
+                    <>
                       <Button
                         onClick={() => {
                           setEditing(undefined);
                           setEditorOpen(true);
                         }}
                       >
-                        <Plus className="size-4" /> Add the first question
+                        <Plus className="size-4" /> Add a question
                       </Button>
                       <Button variant="outline" onClick={() => setAiOpen(true)}>
                         <Sparkles className="size-4" /> Generate with AI
                       </Button>
-                    </div>
+                    </>
                   ) : undefined
                 }
               />
@@ -422,6 +436,7 @@ function TopicRow({
   onSelect,
   onAddChild,
   onRename,
+  onExamFromTopic,
   onDelete,
 }: {
   topic: Topic;
@@ -430,6 +445,7 @@ function TopicRow({
   onSelect: () => void;
   onAddChild: () => void;
   onRename: () => void;
+  onExamFromTopic: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -450,7 +466,7 @@ function TopicRow({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            className="text-muted-foreground hover:text-foreground hover:bg-accent rounded-md p-1.5 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
+            className="text-muted-foreground hover:text-foreground hover:bg-accent rounded-md p-1.5 transition-[opacity,background-color] md:opacity-0 md:group-hover:opacity-100 data-[state=open]:opacity-100"
             aria-label={`Options for ${topic.name}`}
           >
             <MoreHorizontal className="size-3.5" />
@@ -464,20 +480,15 @@ function TopicRow({
             <Pencil /> Rename
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={onExamFromTopic}>
+            <ClipboardList /> Exam from this
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={onDelete}>
             <Trash2 /> Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
-  );
-}
-
-function EmptyState({ text, action }: { text: string; action?: ReactNode }) {
-  return (
-    <div className="border-border flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-16 text-center">
-      <p className="text-muted-foreground text-sm">{text}</p>
-      {action}
     </div>
   );
 }

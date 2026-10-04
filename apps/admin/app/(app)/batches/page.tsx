@@ -11,8 +11,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BatchFormDialog } from "@/components/batch-form-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { EmptyState } from "@/components/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PageBody, PageHeader } from "@/components/page-header";
-import { Copy, Loader2, MoreHorizontal, Plus, Trash2, Users } from "lucide-react";
+import { Copy, MoreHorizontal, Plus, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -68,19 +70,22 @@ export default function BatchesPage() {
       />
       <PageBody>
         {loading ? (
-          <div className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Loader2 className="size-4 animate-spin" /> Loading batches…
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Skeleton className="h-40 rounded-2xl" />
+            <Skeleton className="h-40 rounded-2xl" />
+            <Skeleton className="h-40 rounded-2xl" />
           </div>
         ) : batches.length === 0 ? (
-          <div className="border-border flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-16 text-center">
-            <Users className="text-muted-foreground size-6" />
-            <p className="text-muted-foreground text-sm">
-              No batches yet. Create one for the current term.
-            </p>
-            <Button onClick={openNew}>
-              <Plus className="size-4" /> New batch
-            </Button>
-          </div>
+          <EmptyState
+            icon={<Users className="size-5" />}
+            title="No batches yet"
+            description="A batch is a semester cohort. Create one, add your roster, and every exam and report card hangs off it."
+            action={
+              <Button onClick={openNew}>
+                <Plus className="size-4" /> New batch
+              </Button>
+            }
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {batches.map((batch) => (
@@ -125,16 +130,6 @@ export default function BatchesPage() {
                 <CardContent className="flex gap-2">
                   <Button asChild variant="outline" size="sm">
                     <Link href={`/batches/${batch.id}`}>Open</Link>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setCopyFrom(batch.id);
-                      setDialogOpen(true);
-                    }}
-                  >
-                    <Copy className="size-4" /> Copy to new term
                   </Button>
                 </CardContent>
               </Card>

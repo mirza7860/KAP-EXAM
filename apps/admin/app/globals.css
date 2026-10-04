@@ -8,7 +8,9 @@
  */
 @source "../../../packages/ui/src";
 
-@theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Bind the shared type roles to real faces loaded by next/font. */
+:root {
+  --type-display: var(--font-fraunces), ui-serif, Georgia, "Times New Roman", serif;
+  --type-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --type-mono: var(--font-geist-mono), ui-monospace, monospace;
 }

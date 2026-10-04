@@ -10,8 +10,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PageBody, PageHeader } from "@/components/page-header";
-import { ClipboardList, Loader2, Plus } from "lucide-react";
+import { ClipboardList, Plus } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -60,42 +62,41 @@ export default function ExamsPage() {
       />
       <PageBody>
         {loading ? (
-          <div className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Loader2 className="size-4 animate-spin" /> Loading exams…
-          </div>
+          <Skeleton className="h-64 rounded-xl" />
         ) : batchCount === 0 ? (
-          <div className="border-border flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-16 text-center">
-            <ClipboardList className="text-muted-foreground size-6" />
-            <p className="text-muted-foreground text-sm">
-              Create a batch first — every exam belongs to a batch.
-            </p>
-            <Button asChild>
-              <Link href="/batches">Go to batches</Link>
-            </Button>
-          </div>
+          <EmptyState
+            icon={<ClipboardList className="size-5" />}
+            title="Create a batch first"
+            description="Every exam belongs to a batch — the group of students who sit it."
+            action={
+              <Button asChild>
+                <Link href="/batches">Go to batches</Link>
+              </Button>
+            }
+          />
         ) : exams.length === 0 ? (
-          <div className="border-border flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-16 text-center">
-            <ClipboardList className="text-muted-foreground size-6" />
-            <p className="text-muted-foreground text-sm">
-              Pick a topic or subtopic, take 10 or 15 questions, publish the link. An exam takes a
-              minute to set up.
-            </p>
-            <Button asChild>
-              <Link href="/exams/new">
-                <Plus className="size-4" /> New exam
-              </Link>
-            </Button>
-          </div>
+          <EmptyState
+            icon={<ClipboardList className="size-5" />}
+            title="No exams yet"
+            description="Pick a topic or subtopic, take 10 or 15 questions, then share the QR in class. An exam takes a minute to set up."
+            action={
+              <Button asChild>
+                <Link href="/exams/new">
+                  <Plus className="size-4" /> New exam
+                </Link>
+              </Button>
+            }
+          />
         ) : (
           <div className="rounded-xl border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Exam</TableHead>
-                  <TableHead className="hidden md:table-cell">Batch</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="hidden lg:table-cell">Window</TableHead>
-                  <TableHead className="w-16 text-right">Q</TableHead>
+                  <TableHead className="eyebrow">Exam</TableHead>
+                  <TableHead className="eyebrow hidden md:table-cell">Batch</TableHead>
+                  <TableHead className="eyebrow">Status</TableHead>
+                  <TableHead className="eyebrow hidden lg:table-cell">Window</TableHead>
+                  <TableHead className="eyebrow w-16 text-right">Q</TableHead>
                   <TableHead className="w-20" />
                 </TableRow>
               </TableHeader>

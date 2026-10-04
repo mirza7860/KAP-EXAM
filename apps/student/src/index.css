@@ -1,8 +1,17 @@
+/* Self-hosted: the exam must render offline, so no CDN font at runtime. */
+@import "@fontsource-variable/fraunces/full.css";
 @import "tailwindcss";
 @import "../../../packages/ui/src/styles/theme.css";
 
 /* Tailwind v4 scans source files; the shared UI package lives outside this app. */
 @source "../../../packages/ui/src";
+
+:root {
+  --type-display: "Fraunces Variable", ui-serif, Georgia, "Times New Roman", serif;
+  --type-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --type-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+}
 
 html,
 body,
@@ -11,8 +20,6 @@ body,
 }
 
 body {
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   /* The exam is used one-handed on a phone; don't let iOS bounce the chrome. */
   overscroll-behavior-y: none;
 }

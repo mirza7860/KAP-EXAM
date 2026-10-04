@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { joinUrl, examApi, type ExamLiveState, type ExamDetail } from "@/lib/api";
 import { useSession } from "@/lib/session";
-import { ArrowLeft, Loader2, Users } from "lucide-react";
+import { ArrowLeft, Copy, Loader2, Users } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 function formatCountdown(ms: number): string {
   if (ms <= 0) return "00:00";
@@ -78,6 +79,17 @@ export default function HostPage() {
   const remaining = new Date(exam.endsAt).getTime() - now;
   const inProgress = live?.participants.filter((p) => p.status === "in_progress").length ?? 0;
   const total = live?.participants.length ?? 0;
+  const isOpen = remaining > 0 && exam.status !== "closed";
+
+  async function copyCode() {
+    if (!exam) return;
+    try {
+      await navigator.clipboard.writeText(exam.joinCode);
+      toast.success("Code copied");
+    } catch {
+      toast.error("Could not copy");
+    }
+  }
 
   return (
     <div className="bg-background flex min-h-svh flex-col p-8">
@@ -89,8 +101,8 @@ export default function HostPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant={remaining > 0 ? "success" : "secondary"}>
-            {remaining > 0 ? `Closes in ${formatCountdown(remaining)}` : "Closed"}
+          <Badge variant={isOpen ? "success" : "destructive"}>
+            {isOpen ? `Closes in ${formatCountdown(remaining)}` : "Exam closed"}
           </Badge>
           <Button variant="outline" size="sm" asChild>
             <Link href={`/exams/${exam.id}`}>
@@ -110,7 +122,12 @@ export default function HostPage() {
           </div>
           <div className="text-center">
             <p className="text-muted-foreground text-xs">Or enter the code</p>
-            <p className="font-mono text-4xl font-semibold tracking-[0.35em]">{exam.joinCode}</p>
+            <div className="mt-1 flex items-center justify-center gap-2">
+              <p className="font-mono text-4xl font-semibold tracking-[0.35em]">{exam.joinCode}</p>
+              <Button variant="ghost" size="icon" onClick={() => void copyCode()} aria-label="Copy code">
+                <Copy className="size-4" />
+              </Button>
+            </div>
           </div>
           <p className="text-muted-foreground max-w-xs text-center text-xs break-all">{url}</p>
         </Card>

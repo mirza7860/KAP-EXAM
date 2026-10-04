@@ -27,7 +27,6 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarRail,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import {
   BarChart3,
@@ -77,7 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarGroupLabel className="eyebrow">Workspace</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {NAV.map((item) => {
@@ -85,7 +84,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                   const Icon = item.icon;
                   return (
                     <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        tooltip={item.label}
+                        className="data-[active=true]:shadow-[inset_3px_0_0_0_var(--sidebar-primary)]"
+                      >
                         <Link href={item.href}>
                           <Icon />
                           <span>{item.label}</span>

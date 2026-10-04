@@ -9,6 +9,7 @@ import { authRoutes } from "./routes/auth.js";
 import { batchRoutes } from "./routes/batches.js";
 import { examRoutes } from "./routes/exams.js";
 import { mediaRoutes } from "./routes/media.js";
+import { overviewRoutes } from "./routes/overview.js";
 import { questionRoutes, topicRoutes } from "./routes/questions.js";
 import { reportRoutes } from "./routes/reports.js";
 
@@ -42,6 +43,7 @@ app.route("/api/media", mediaRoutes);
 // Protected: everything a signed-in teacher does.
 const teacherRoutes = new Hono<AppBindings>();
 teacherRoutes.use("*", requireTeacher);
+teacherRoutes.route("/overview", overviewRoutes);
 teacherRoutes.route("/batches", batchRoutes);
 teacherRoutes.route("/topics", topicRoutes);
 teacherRoutes.route("/questions", questionRoutes);

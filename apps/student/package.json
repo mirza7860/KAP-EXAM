@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource-variable/fraunces": "^5.3.0",
     "@kap-exam/shared": "workspace:*",
     "@kap-exam/ui": "workspace:*",
     "react": "^19.2.8",

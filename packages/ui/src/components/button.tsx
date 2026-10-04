@@ -5,7 +5,7 @@ import { cn } from "../lib/cn";
 
 const buttonVariants = cva(
   // Craft: only transform/colour animate, press feedback is instant and subtle.
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium " +
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium " +
     "transition-[transform,background-color,border-color,color,box-shadow] duration-150 ease-out " +
     "outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 " +
     "disabled:pointer-events-none disabled:opacity-50 " +

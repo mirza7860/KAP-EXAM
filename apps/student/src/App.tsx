@@ -210,7 +210,9 @@ export default function App() {
       <main className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center gap-6 p-6">
         <div className="flex flex-col items-center gap-2 text-center">
           <Logo height={30} />
-          <h1 className="text-2xl font-semibold">{alreadyFinished ? "Already submitted" : "Submitted"}</h1>
+          <h1 className="display text-3xl font-semibold">
+            {alreadyFinished ? "Already submitted" : "Submitted"}
+          </h1>
           <p className="text-muted-foreground text-sm">
             {alreadyFinished
               ? "You finished this exam earlier — here is your result."
@@ -220,15 +222,24 @@ export default function App() {
         {result && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-center text-4xl tabular-nums">
+              <CardTitle className="stat-figure text-center text-5xl">
                 {result.score}
-                <span className="text-muted-foreground text-lg">/{result.maxScore}</span>
+                <span className="text-muted-foreground text-xl">/{result.maxScore}</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex justify-center gap-6 text-center text-sm">
-              <span><strong className="tabular-nums">{result.correct}</strong> correct</span>
-              <span><strong className="tabular-nums">{result.wrong}</strong> wrong</span>
-              <span><strong className="tabular-nums">{result.unattempted}</strong> skipped</span>
+            <CardContent className="flex justify-center gap-8 text-center text-sm">
+              <span>
+                <strong className="stat-figure block text-xl">{result.correct}</strong>
+                <span className="text-muted-foreground">correct</span>
+              </span>
+              <span>
+                <strong className="stat-figure block text-xl">{result.wrong}</strong>
+                <span className="text-muted-foreground">wrong</span>
+              </span>
+              <span>
+                <strong className="stat-figure block text-xl">{result.unattempted}</strong>
+                <span className="text-muted-foreground">skipped</span>
+              </span>
             </CardContent>
           </Card>
         )}
@@ -401,7 +412,7 @@ export default function App() {
       <div className="flex flex-col items-center gap-4 text-center">
         <Logo height={34} />
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Join your exam</h1>
+          <h1 className="display text-3xl font-semibold tracking-tight">Join your exam</h1>
           <p className="text-muted-foreground text-sm">Enter the code and your roll number.</p>
         </div>
       </div>

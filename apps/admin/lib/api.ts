@@ -321,3 +321,34 @@ export const reportApi = {
   exam: (examId: string) => api.get<ExamReportData>(`/api/reports/exams/${examId}`),
   student: (studentId: string) => api.get<StudentReportData>(`/api/reports/students/${studentId}`),
 };
+
+// ---------------------------------------------------------------------------
+// Overview (dashboard)
+// ---------------------------------------------------------------------------
+
+export interface Overview {
+  counts: { topics: number; questions: number; batches: number; students: number };
+  exams: { draft: number; published: number; closed: number; liveNow: number; upcoming: number };
+  recentExams: {
+    id: string;
+    title: string;
+    status: string;
+    batchName: string;
+    questionCount: number;
+    startsAt: string;
+    endsAt: string;
+    joinCode: string;
+  }[];
+  focus: {
+    id: string;
+    title: string;
+    batchName: string;
+    startsAt: string;
+    endsAt: string;
+    joinCode: string;
+    live: boolean;
+    studentCount: number;
+  }[];
+}
+
+export const overviewApi = { get: () => api.get<Overview>("/api/overview") };
