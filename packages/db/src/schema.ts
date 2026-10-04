@@ -101,7 +101,7 @@ export const batchStudents = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
-// Question bank: topics -> subtopics -> questions, and reusable modules
+// Question bank: topics -> subtopics -> questions
 // ---------------------------------------------------------------------------
 
 export const topics = sqliteTable(
@@ -140,33 +140,6 @@ export const questions = sqliteTable(
     archivedAt: ts("archived_at"),
   },
   (t) => [index("questions_subtopic_idx").on(t.subtopicId)],
-);
-
-export const questionModules = sqliteTable(
-  "question_modules",
-  {
-    id: text("id").primaryKey(),
-    name: text("name").notNull(),
-    description: text("description"),
-    parentId: text("parent_id"),
-    createdAt: ts("created_at").notNull().default(now),
-    archivedAt: ts("archived_at"),
-  },
-  (t) => [index("question_modules_parent_idx").on(t.parentId)],
-);
-
-export const moduleQuestions = sqliteTable(
-  "module_questions",
-  {
-    moduleId: text("module_id")
-      .notNull()
-      .references(() => questionModules.id, { onDelete: "cascade" }),
-    questionId: text("question_id")
-      .notNull()
-      .references(() => questions.id, { onDelete: "cascade" }),
-    position: integer("position").notNull().default(0),
-  },
-  (t) => [primaryKey({ columns: [t.moduleId, t.questionId] })],
 );
 
 // ---------------------------------------------------------------------------

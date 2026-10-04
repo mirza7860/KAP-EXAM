@@ -85,7 +85,7 @@ export default function HostPage() {
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-semibold tracking-tight">{exam.title}</h1>
           <p className="text-muted-foreground text-sm">
-            {exam.batchName} · {exam.questionCount} questions · {exam.maxScore} marks
+            {exam.batchName} · {exam.paper.length} questions · {exam.maxScore} marks
           </p>
         </div>
         <div className="flex items-center gap-2">

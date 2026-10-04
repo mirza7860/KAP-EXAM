@@ -354,7 +354,7 @@ export default function QuestionsPage() {
       <ConfirmDialog
         open={topicToDelete !== null}
         onOpenChange={(open) => !open && setTopicToDelete(null)}
-        title={`Delete “${topicToDelete?.name}”?`}
+        title={`Delete “${topicToDelete?.name ?? "this topic"}”?`}
         description="This removes the topic, its subtopics and every question inside them. Exams already given keep their own copy, so past report cards are safe."
         confirmLabel="Delete topic"
         onConfirm={async () => {

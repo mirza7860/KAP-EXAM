@@ -10,7 +10,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ExamFormDialog } from "@/components/exam-form-dialog";
 import { PageBody, PageHeader } from "@/components/page-header";
 import { ClipboardList, Loader2, Plus } from "lucide-react";
 import Link from "next/link";
@@ -26,16 +25,15 @@ function statusVariant(status: ExamSummary["status"]) {
 
 export default function ExamsPage() {
   const [exams, setExams] = useState<ExamSummary[]>([]);
-  const [batches, setBatches] = useState<BatchSummary[]>([]);
+  const [batchCount, setBatchCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [examList, batchList] = await Promise.all([examApi.list(), batchApi.list()]);
       setExams(examList);
-      setBatches(batchList);
+      setBatchCount(batchList.length);
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Could not load exams");
     } finally {
@@ -51,10 +49,12 @@ export default function ExamsPage() {
     <>
       <PageHeader
         title="Exams"
-        description="Compose, publish and monitor exams."
+        description="Create an exam, share the QR in class, watch them join."
         actions={
-          <Button onClick={() => setDialogOpen(true)} disabled={batches.length === 0}>
-            <Plus className="size-4" /> New exam
+          <Button asChild disabled={batchCount === 0}>
+            <Link href="/exams/new">
+              <Plus className="size-4" /> New exam
+            </Link>
           </Button>
         }
       />
@@ -63,7 +63,7 @@ export default function ExamsPage() {
           <div className="text-muted-foreground flex items-center gap-2 text-sm">
             <Loader2 className="size-4 animate-spin" /> Loading exams…
           </div>
-        ) : batches.length === 0 ? (
+        ) : batchCount === 0 ? (
           <div className="border-border flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-16 text-center">
             <ClipboardList className="text-muted-foreground size-6" />
             <p className="text-muted-foreground text-sm">
@@ -76,9 +76,14 @@ export default function ExamsPage() {
         ) : exams.length === 0 ? (
           <div className="border-border flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-16 text-center">
             <ClipboardList className="text-muted-foreground size-6" />
-            <p className="text-muted-foreground text-sm">No exams yet.</p>
-            <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="size-4" /> New exam
+            <p className="text-muted-foreground text-sm">
+              Pick a topic or subtopic, take 10 or 15 questions, publish the link. An exam takes a
+              minute to set up.
+            </p>
+            <Button asChild>
+              <Link href="/exams/new">
+                <Plus className="size-4" /> New exam
+              </Link>
             </Button>
           </div>
         ) : (
@@ -121,13 +126,6 @@ export default function ExamsPage() {
           </div>
         )}
       </PageBody>
-
-      <ExamFormDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        batches={batches}
-        onCreated={(exam) => setExams((current) => [exam, ...current])}
-      />
     </>
   );
 }

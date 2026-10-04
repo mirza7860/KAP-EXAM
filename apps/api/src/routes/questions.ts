@@ -1,8 +1,5 @@
 import { schema, type Database } from "@kap-exam/db";
 import {
-  moduleInputSchema,
-  moduleQuestionsInputSchema,
-  moduleUpdateSchema,
   questionInputSchema,
   topicInputSchema,
   topicUpdateSchema,
@@ -14,26 +11,24 @@ import { badRequest, notFound } from "../lib/http.js";
 import { deserializeQuestion, serializeQuestion } from "../lib/question.js";
 
 /**
- * Question bank: topics -> subtopics -> questions, plus reusable modules.
- * Everything here is behind `requireTeacher` (applied where it is mounted).
+ * Question bank: topics -> subtopics -> questions.
+ *
+ * Topics and subtopics are the *pools* an exam draws from: you can build an
+ * exam straight from a subtopic (or a whole topic's subtree) by taking N random
+ * questions. There is no separate "module" collection to maintain.
  */
+export const topicRoutes = new Hono<AppBindings>();
+export const questionRoutes = new Hono<AppBindings>();
 
 function fields(error: { flatten: () => { fieldErrors: unknown } }) {
   return error.flatten().fieldErrors as Record<string, string[]>;
 }
 
-/**
- * Delete a topic, its subtopics, and every question inside them.
- *
- * This is a real delete, not an archive: exams snapshot their questions into
- * `exam_paper_items`, so removing a question from the bank can never rewrite a
- * past report card.
- */
-async function deleteTopicSubtree(db: Database, rootId: string): Promise<number> {
+/** All topic ids in the subtree rooted at `rootId` (inclusive). */
+async function topicSubtree(db: Database, rootId: string): Promise<string[]> {
   const rows = await db
     .select({ id: schema.topics.id, parentId: schema.topics.parentId })
     .from(schema.topics);
-
   const ids = new Set<string>([rootId]);
   let changed = true;
   while (changed) {
@@ -45,28 +40,40 @@ async function deleteTopicSubtree(db: Database, rootId: string): Promise<number>
       }
     }
   }
-
-  const list = [...ids];
-  await db.delete(schema.questions).where(inArray(schema.questions.subtopicId, list));
-  await db.delete(schema.topics).where(inArray(schema.topics.id, list));
-  return list.length;
+  return [...ids];
 }
 
 // ---------------------------------------------------------------------------
 // Topics (self-referential: a topic with a parent is a subtopic)
 // ---------------------------------------------------------------------------
 
-export const topicRoutes = new Hono<AppBindings>();
-
 topicRoutes.get("/", async (c) => {
-  const includeArchived = c.req.query("includeArchived") === "true";
   const rows = await c
     .get("db")
     .select()
     .from(schema.topics)
-    .where(includeArchived ? undefined : isNull(schema.topics.archivedAt))
     .orderBy(asc(schema.topics.position), asc(schema.topics.name));
   return c.json({ data: rows });
+});
+
+/** Question counts per subtopic and per topic subtree — powers the picker. */
+topicRoutes.get("/counts", async (c) => {
+  const db = c.get("db");
+  const bySubtopicRows = await db
+    .select({ subtopicId: schema.questions.subtopicId, count: sql<number>`count(*)` })
+    .from(schema.questions)
+    .groupBy(schema.questions.subtopicId);
+  const bySubtopic: Record<string, number> = {};
+  for (const row of bySubtopicRows) bySubtopic[row.subtopicId] = Number(row.count);
+
+  const topics = await db.select({ id: schema.topics.id }).from(schema.topics);
+  const subtree: Record<string, number> = {};
+  for (const topic of topics) {
+    const ids = await topicSubtree(db, topic.id);
+    subtree[topic.id] = ids.reduce((sum, id) => sum + (bySubtopic[id] ?? 0), 0);
+  }
+
+  return c.json({ data: { bySubtopic, subtree } });
 });
 
 topicRoutes.post("/", async (c) => {
@@ -106,28 +113,30 @@ topicRoutes.patch("/:id", async (c) => {
   return c.json({ data: row });
 });
 
+/** Deletes the topic, its subtopics and every question inside them. */
 topicRoutes.delete("/:id", async (c) => {
-  const deleted = await deleteTopicSubtree(c.get("db"), c.req.param("id"));
-  return c.json({ data: { id: c.req.param("id"), topicsDeleted: deleted } });
+  const db = c.get("db");
+  const ids = await topicSubtree(db, c.req.param("id"));
+  await db.delete(schema.questions).where(inArray(schema.questions.subtopicId, ids));
+  await db.delete(schema.topics).where(inArray(schema.topics.id, ids));
+  return c.json({ data: { id: c.req.param("id"), topicsDeleted: ids.length } });
 });
 
 // ---------------------------------------------------------------------------
 // Questions
 // ---------------------------------------------------------------------------
 
-export const questionRoutes = new Hono<AppBindings>();
-
 questionRoutes.get("/", async (c) => {
   const db = c.get("db");
   const subtopicId = c.req.query("subtopicId");
+  const topicId = c.req.query("topicId");
   const search = c.req.query("search");
-  const includeArchived = c.req.query("includeArchived") === "true";
   const limit = Math.min(Number(c.req.query("limit") ?? 50) || 50, 200);
   const offset = Math.max(Number(c.req.query("offset") ?? 0) || 0, 0);
 
   const conditions = [];
   if (subtopicId) conditions.push(eq(schema.questions.subtopicId, subtopicId));
-  if (!includeArchived) conditions.push(isNull(schema.questions.archivedAt));
+  if (topicId) conditions.push(inArray(schema.questions.subtopicId, await topicSubtree(db, topicId)));
   if (search) conditions.push(like(schema.questions.prompt, `%${search}%`));
 
   const rows = await db
@@ -214,142 +223,4 @@ questionRoutes.patch("/:id", async (c) => {
 questionRoutes.delete("/:id", async (c) => {
   await c.get("db").delete(schema.questions).where(eq(schema.questions.id, c.req.param("id")));
   return c.json({ data: { id: c.req.param("id"), deleted: true } });
-});
-
-// ---------------------------------------------------------------------------
-// Reusable modules ("like Google Drive")
-// ---------------------------------------------------------------------------
-
-export const moduleRoutes = new Hono<AppBindings>();
-
-moduleRoutes.get("/", async (c) => {
-  const db = c.get("db");
-  const includeArchived = c.req.query("includeArchived") === "true";
-
-  const rows = await db
-    .select()
-    .from(schema.questionModules)
-    .where(includeArchived ? undefined : isNull(schema.questionModules.archivedAt))
-    .orderBy(asc(schema.questionModules.name));
-
-  const counts = await db
-    .select({ moduleId: schema.moduleQuestions.moduleId, count: sql<number>`count(*)` })
-    .from(schema.moduleQuestions)
-    .groupBy(schema.moduleQuestions.moduleId);
-  const countMap = new Map(counts.map((row) => [row.moduleId, Number(row.count)]));
-
-  return c.json({
-    data: rows.map((row) => ({ ...row, questionCount: countMap.get(row.id) ?? 0 })),
-  });
-});
-
-moduleRoutes.post("/", async (c) => {
-  const parsed = moduleInputSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) throw badRequest("Invalid module", fields(parsed.error));
-
-  const row = { id: crypto.randomUUID(), ...parsed.data };
-  await c.get("db").insert(schema.questionModules).values(row);
-  return c.json({ data: { ...row, questionCount: 0 } }, 201);
-});
-
-moduleRoutes.get("/:id", async (c) => {
-  const db = c.get("db");
-  const id = c.req.param("id");
-  const module = await db
-    .select()
-    .from(schema.questionModules)
-    .where(eq(schema.questionModules.id, id))
-    .get();
-  if (!module) throw notFound("Module not found");
-
-  const items = await db
-    .select({ questionId: schema.moduleQuestions.questionId, position: schema.moduleQuestions.position })
-    .from(schema.moduleQuestions)
-    .where(eq(schema.moduleQuestions.moduleId, id))
-    .orderBy(asc(schema.moduleQuestions.position));
-
-  const ids = items.map((item) => item.questionId);
-  const questions = ids.length
-    ? await db.select().from(schema.questions).where(inArray(schema.questions.id, ids))
-    : [];
-  const byId = new Map(questions.map((row) => [row.id, row]));
-
-  return c.json({
-    data: {
-      ...module,
-      questionCount: ids.length,
-      questions: ids
-        .map((questionId) => byId.get(questionId))
-        .filter((row): row is NonNullable<typeof row> => Boolean(row))
-        .map(deserializeQuestion),
-    },
-  });
-});
-
-moduleRoutes.patch("/:id", async (c) => {
-  const parsed = moduleUpdateSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) throw badRequest("Invalid module", fields(parsed.error));
-
-  const db = c.get("db");
-  await db
-    .update(schema.questionModules)
-    .set(parsed.data)
-    .where(eq(schema.questionModules.id, c.req.param("id")));
-  const row = await db
-    .select()
-    .from(schema.questionModules)
-    .where(eq(schema.questionModules.id, c.req.param("id")))
-    .get();
-  if (!row) throw notFound("Module not found");
-  return c.json({ data: row });
-});
-
-moduleRoutes.delete("/:id", async (c) => {
-  await c
-    .get("db")
-    .delete(schema.questionModules)
-    .where(eq(schema.questionModules.id, c.req.param("id")));
-  return c.json({ data: { id: c.req.param("id"), deleted: true } });
-});
-
-moduleRoutes.post("/:id/questions", async (c) => {
-  const parsed = moduleQuestionsInputSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) throw badRequest("Invalid question list", fields(parsed.error));
-
-  const db = c.get("db");
-  const moduleId = c.req.param("id");
-  const module = await db
-    .select({ id: schema.questionModules.id })
-    .from(schema.questionModules)
-    .where(eq(schema.questionModules.id, moduleId))
-    .get();
-  if (!module) throw notFound("Module not found");
-
-  const last = await db
-    .select({ position: schema.moduleQuestions.position })
-    .from(schema.moduleQuestions)
-    .where(eq(schema.moduleQuestions.moduleId, moduleId))
-    .orderBy(desc(schema.moduleQuestions.position))
-    .limit(1);
-  let position = (last[0]?.position ?? -1) + 1;
-
-  await db
-    .insert(schema.moduleQuestions)
-    .values(parsed.data.questionIds.map((questionId) => ({ moduleId, questionId, position: position++ })))
-    .onConflictDoNothing();
-
-  return c.json({ data: { moduleId, added: parsed.data.questionIds.length } });
-});
-
-moduleRoutes.delete("/:id/questions/:questionId", async (c) => {
-  await c
-    .get("db")
-    .delete(schema.moduleQuestions)
-    .where(
-      and(
-        eq(schema.moduleQuestions.moduleId, c.req.param("id")),
-        eq(schema.moduleQuestions.questionId, c.req.param("questionId")),
-      ),
-    );
-  return c.json({ data: { ok: true } });
 });

@@ -1,7 +1,6 @@
 import type {
   Question,
   QuestionInput,
-  QuestionModule,
   Session,
   Topic,
 } from "@kap-exam/shared";
@@ -125,6 +124,10 @@ export const authApi = {
 
 export const topicApi = {
   list: (includeArchived = false) => api.get<Topic[]>(`/api/topics?includeArchived=${includeArchived}`),
+  counts: () =>
+    api.get<{ bySubtopic: Record<string, number>; subtree: Record<string, number> }>(
+      "/api/topics/counts",
+    ),
   create: (input: { name: string; parentId?: string | null; position?: number }) =>
     api.post<Topic>("/api/topics", input),
   update: (id: string, input: Partial<{ name: string; parentId: string | null; position: number }>) =>
@@ -145,28 +148,6 @@ export const questionApi = {
   create: (input: QuestionInput) => api.post<Question>("/api/questions", input),
   update: (id: string, input: QuestionInput) => api.patch<Question>(`/api/questions/${id}`, input),
   remove: (id: string) => api.del<{ id: string; deleted: boolean }>(`/api/questions/${id}`),
-};
-
-export interface ModuleSummary extends QuestionModule {
-  questionCount: number;
-}
-
-export interface ModuleDetail extends ModuleSummary {
-  questions: Question[];
-}
-
-export const moduleApi = {
-  list: () => api.get<ModuleSummary[]>("/api/modules"),
-  create: (input: { name: string; description?: string | null }) =>
-    api.post<ModuleSummary>("/api/modules", input),
-  update: (id: string, input: { name?: string; description?: string | null }) =>
-    api.patch<ModuleSummary>(`/api/modules/${id}`, input),
-  remove: (id: string) => api.del<{ id: string; deleted: boolean }>(`/api/modules/${id}`),
-  get: (id: string) => api.get<ModuleDetail>(`/api/modules/${id}`),
-  addQuestions: (id: string, questionIds: string[]) =>
-    api.post<{ moduleId: string; added: number }>(`/api/modules/${id}/questions`, { questionIds }),
-  removeQuestion: (id: string, questionId: string) =>
-    api.del<{ ok: boolean }>(`/api/modules/${id}/questions/${questionId}`),
 };
 
 // ---------------------------------------------------------------------------
@@ -203,7 +184,7 @@ export const batchApi = {
   get: (id: string) => api.get<BatchDetail>(`/api/batches/${id}`),
   update: (id: string, input: { name?: string; description?: string | null }) =>
     api.patch<BatchSummary>(`/api/batches/${id}`, input),
-  archive: (id: string) => api.del<{ id: string; archived: boolean }>(`/api/batches/${id}`),
+  remove: (id: string) => api.del<{ id: string; deleted: boolean }>(`/api/batches/${id}`),
   addStudent: (id: string, input: { name?: string; rollNo?: string; studentId?: string }) =>
     api.post<{ batchId: string; studentId: string }>(`/api/batches/${id}/students`, input),
   removeStudent: (id: string, studentId: string) =>
@@ -213,6 +194,11 @@ export const batchApi = {
 // ---------------------------------------------------------------------------
 // Exams
 // ---------------------------------------------------------------------------
+
+export type PaperSourceInput =
+  | { kind: "subtopic"; subtopicId: string; count?: number }
+  | { kind: "topic"; topicId: string; count?: number }
+  | { kind: "questions"; questionIds: string[] };
 
 export interface ExamSummary {
   id: string;
@@ -276,7 +262,7 @@ export const examApi = {
       shuffleOptions?: boolean;
     },
   ) => api.patch<ExamSummary>(`/api/exams/${id}`, input),
-  compose: (id: string, input: { moduleIds: string[]; questionIds: string[] }) =>
+  compose: (id: string, input: { sources: PaperSourceInput[] }) =>
     api.post<{ questionCount: number; maxScore: number; paper: PaperItem[] }>(
       `/api/exams/${id}/compose`,
       input,
@@ -284,4 +270,54 @@ export const examApi = {
   publish: (id: string) => api.post<ExamSummary>(`/api/exams/${id}/publish`, {}),
   close: (id: string) => api.post<ExamSummary>(`/api/exams/${id}/close`, {}),
   live: (id: string) => api.get<ExamLiveState>(`/api/exams/${id}/live`),
+};
+
+// ---------------------------------------------------------------------------
+// Reports
+// ---------------------------------------------------------------------------
+
+export interface AttemptResultRow {
+  attemptId: string;
+  studentId: string;
+  studentName: string;
+  rollNo: string;
+  status: string;
+  score: number;
+  maxScore: number;
+  correct: number;
+  wrong: number;
+  unattempted: number;
+  violationCount: number;
+}
+
+export interface ExamReportData {
+  examId: string;
+  examTitle: string;
+  batchName: string;
+  closedAt: string;
+  maxScore: number;
+  results: AttemptResultRow[];
+}
+
+export interface StudentHistoryRow extends AttemptResultRow {
+  examTitle: string;
+  takenAt: string;
+  batchId?: string;
+  batchName?: string;
+}
+
+export interface StudentReportData {
+  studentId: string;
+  name: string;
+  rollNo: string;
+  examsTaken: number;
+  examsMissed: number;
+  totals: { score: number; maxScore: number; correct: number; wrong: number; unattempted: number };
+  history: StudentHistoryRow[];
+  batches: { id: string; name: string }[];
+}
+
+export const reportApi = {
+  exam: (examId: string) => api.get<ExamReportData>(`/api/reports/exams/${examId}`),
+  student: (studentId: string) => api.get<StudentReportData>(`/api/reports/students/${studentId}`),
 };

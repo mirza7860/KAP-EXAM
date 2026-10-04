@@ -20,7 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ExamComposeDialog } from "@/components/exam-compose-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { PaperBuilder, type SourceDraft } from "@/components/paper-builder";
 import { PageBody, PageHeader } from "@/components/page-header";
 import { QUESTION_TYPE_LABELS } from "@/lib/question-form";
 import {
@@ -53,7 +54,9 @@ export default function ExamDetailPage() {
 
   const [exam, setExam] = useState<ExamDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [composeOpen, setComposeOpen] = useState(false);
+  const [editingPaper, setEditingPaper] = useState(false);
+  const [sources, setSources] = useState<SourceDraft[]>([]);
+  const [savingPaper, setSavingPaper] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [confirm, setConfirm] = useState<"publish" | "close" | null>(null);
   const [pending, setPending] = useState(false);
@@ -120,6 +123,29 @@ export default function ExamDetailPage() {
     }
   }
 
+  async function savePaper() {
+    if (!exam || sources.length === 0) return;
+    setSavingPaper(true);
+    try {
+      const result = await examApi.compose(exam.id, {
+        sources: sources.map((source) =>
+          source.kind === "questions"
+            ? { kind: "questions", questionIds: source.questionIds }
+            : source.kind === "subtopic"
+              ? { kind: "subtopic", subtopicId: source.subtopicId, count: source.count }
+              : { kind: "topic", topicId: source.topicId, count: source.count },
+        ),
+      });
+      setEditingPaper(false);
+      await load();
+      toast.success(`Paper saved — ${result.questionCount} questions`);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Could not save");
+    } finally {
+      setSavingPaper(false);
+    }
+  }
+
   async function copyLink() {
     if (!exam) return;
     try {
@@ -134,7 +160,7 @@ export default function ExamDetailPage() {
     <>
       <PageHeader
         title={exam?.title ?? "Exam"}
-        description={exam ? `${exam.batchName} · ${exam.questionCount} questions · ${exam.maxScore} marks` : undefined}
+        description={exam ? `${exam.batchName} · ${exam.paper.length} questions · ${exam.maxScore} marks` : undefined}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" asChild>
@@ -144,7 +170,10 @@ export default function ExamDetailPage() {
             </Button>
             {exam?.status === "draft" && (
               <>
-                <Button variant="outline" size="sm" onClick={() => setComposeOpen(true)}>
+                <Button variant="outline" size="sm" onClick={() => {
+                  setSources([]);
+                  setEditingPaper(true);
+                }}>
                   <Pencil className="size-4" /> Questions
                 </Button>
                 <Button size="sm" onClick={() => setConfirm("publish")}>
@@ -159,7 +188,7 @@ export default function ExamDetailPage() {
                     <Radio className="size-4" /> Display
                   </Link>
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
+                <Button size="sm" onClick={() => setShareOpen(true)}>
                   <Share2 className="size-4" /> Share
                 </Button>
                 <Button variant="destructive" size="sm" onClick={() => setConfirm("close")}>
@@ -239,19 +268,38 @@ export default function ExamDetailPage() {
             <Card>
               <CardHeader className="flex-row items-center justify-between space-y-0">
                 <CardTitle>Paper ({exam.paper.length})</CardTitle>
-                {exam.status === "draft" && (
-                  <Button variant="outline" size="sm" onClick={() => setComposeOpen(true)}>
+                {exam.status === "draft" && !editingPaper && (
+                  <Button variant="outline" size="sm" onClick={() => {
+                    setSources([]);
+                    setEditingPaper(true);
+                  }}>
                     <Pencil className="size-4" /> Edit questions
                   </Button>
                 )}
               </CardHeader>
               <CardContent>
-                {exam.paper.length === 0 ? (
+                {editingPaper ? (
+                  <div className="space-y-4">
+                    <PaperBuilder sources={sources} onChange={setSources} />
+                    <div className="flex justify-end gap-2">
+                      <Button variant="ghost" onClick={() => setEditingPaper(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={() => void savePaper()} disabled={savingPaper || sources.length === 0}>
+                        {savingPaper && <Loader2 className="size-4 animate-spin" />}
+                        Save paper
+                      </Button>
+                    </div>
+                  </div>
+                ) : exam.paper.length === 0 ? (
                   <div className="border-border flex flex-col items-center gap-3 rounded-lg border border-dashed py-10 text-center">
                     <p className="text-muted-foreground text-sm">
                       No questions yet. Add them before publishing.
                     </p>
-                    <Button onClick={() => setComposeOpen(true)}>
+                    <Button onClick={() => {
+                      setSources([]);
+                      setEditingPaper(true);
+                    }}>
                       <Pencil className="size-4" /> Add questions
                     </Button>
                   </div>
@@ -283,20 +331,12 @@ export default function ExamDetailPage() {
 
       {exam && (
         <>
-          <ExamComposeDialog
-            open={composeOpen}
-            onOpenChange={setComposeOpen}
-            examId={exam.id}
-            initialPaper={exam.paper}
-            onComposed={({ paper, maxScore }) => setExam({ ...exam, paper, maxScore, questionCount: paper.length })}
-          />
-
           <Dialog open={shareOpen} onOpenChange={setShareOpen}>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Share this exam</DialogTitle>
                 <DialogDescription>
-                  Students open the link, enter their name and roll number, and start.
+                  Students open the link and enter just their roll number — names come from the roster.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
@@ -320,33 +360,19 @@ export default function ExamDetailPage() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={Boolean(confirm)} onOpenChange={(open) => !open && setConfirm(null)}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>
-                  {confirm === "publish" ? "Publish this exam?" : "Close this exam now?"}
-                </DialogTitle>
-                <DialogDescription>
-                  {confirm === "publish"
-                    ? "The paper is frozen and the link goes live. Past report cards can never change after this."
-                    : "Anyone still working is timed out and no one else can join."}
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setConfirm(null)}>
-                  Cancel
-                </Button>
-                <Button
-                  variant={confirm === "close" ? "destructive" : "default"}
-                  onClick={() => void onConfirm()}
-                  disabled={pending}
-                >
-                  {pending && <Loader2 className="size-4 animate-spin" />}
-                  {confirm === "publish" ? "Publish" : "Close exam"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <ConfirmDialog
+            open={confirm !== null}
+            onOpenChange={(open) => !open && setConfirm(null)}
+            title={confirm === "publish" ? "Publish this exam?" : "Close this exam now?"}
+            description={
+              confirm === "publish"
+                ? "The paper is frozen and the link goes live. Past report cards can never change after this."
+                : "Anyone still working is timed out and no one else can join."
+            }
+            confirmLabel={confirm === "publish" ? "Publish" : "Close exam"}
+            destructive={confirm === "close"}
+            onConfirm={onConfirm}
+          />
         </>
       )}
     </>

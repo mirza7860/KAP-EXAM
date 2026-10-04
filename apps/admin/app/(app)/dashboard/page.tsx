@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, FolderTree, Library, Users } from "lucide-react";
+import { BarChart3, ClipboardList, Library, Users } from "lucide-react";
 import Link from "next/link";
 import { PageBody, PageHeader } from "@/components/page-header";
 
@@ -12,16 +12,16 @@ const SECTIONS = [
     icon: Library,
   },
   {
-    href: "/modules",
-    title: "Modules",
-    body: "Saved collections you can drop into an exam in one go.",
-    icon: FolderTree,
-  },
-  {
     href: "/batches",
     title: "Batches",
     body: "Semester cohorts and their student rosters.",
     icon: Users,
+  },
+  {
+    href: "/exams",
+    title: "Exams",
+    body: "Build a paper from a topic or subtopic, then share the QR.",
+    icon: ClipboardList,
   },
   {
     href: "/reports",

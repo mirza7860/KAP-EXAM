@@ -79,10 +79,32 @@ export const examCreateSchema = z.object({
 
 export type ExamCreateInput = z.infer<typeof examCreateSchema>;
 
-/** Compose a draft exam's paper from modules and/or hand-picked questions. */
+/** One source of questions for a paper. */
+export const paperSourceSchema = z.discriminatedUnion("kind", [
+  /** Take `count` (or all) questions from a single subtopic. */
+  z.object({
+    kind: z.literal("subtopic"),
+    subtopicId: z.string().min(1),
+    count: z.number().int().positive().optional(),
+  }),
+  /** Take `count` (or all) questions from a topic and all its subtopics. */
+  z.object({
+    kind: z.literal("topic"),
+    topicId: z.string().min(1),
+    count: z.number().int().positive().optional(),
+  }),
+  /** Take exactly these questions, in order. */
+  z.object({
+    kind: z.literal("questions"),
+    questionIds: z.array(z.string().min(1)).min(1),
+  }),
+]);
+
+export type PaperSource = z.infer<typeof paperSourceSchema>;
+
+/** Compose a draft exam's paper from one or more sources. */
 export const examComposeSchema = z.object({
-  moduleIds: z.array(z.string().min(1)).default([]),
-  questionIds: z.array(z.string().min(1)).default([]),
+  sources: z.array(paperSourceSchema).min(1),
 });
 
 export type ExamComposeInput = z.infer<typeof examComposeSchema>;

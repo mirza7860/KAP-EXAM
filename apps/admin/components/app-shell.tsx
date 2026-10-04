@@ -33,7 +33,6 @@ import {
   BarChart3,
   ChevronsUpDown,
   ClipboardList,
-  FolderTree,
   LayoutDashboard,
   Library,
   LogOut,
@@ -47,7 +46,6 @@ import { useSession } from "@/lib/session";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/questions", label: "Question bank", icon: Library },
-  { href: "/modules", label: "Modules", icon: FolderTree },
   { href: "/batches", label: "Batches", icon: Users },
   { href: "/exams", label: "Exams", icon: ClipboardList },
   { href: "/reports", label: "Reports", icon: BarChart3 },

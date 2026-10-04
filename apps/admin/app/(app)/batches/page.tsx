@@ -2,9 +2,17 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { BatchFormDialog } from "@/components/batch-form-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageBody, PageHeader } from "@/components/page-header";
-import { Copy, Loader2, Plus, Users } from "lucide-react";
+import { Copy, Loader2, MoreHorizontal, Plus, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -15,6 +23,7 @@ export default function BatchesPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [copyFrom, setCopyFrom] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<BatchSummary | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,6 +43,16 @@ export default function BatchesPage() {
   function openNew() {
     setCopyFrom(null);
     setDialogOpen(true);
+  }
+
+  async function removeBatch(batch: BatchSummary) {
+    try {
+      await batchApi.remove(batch.id);
+      setBatches((current) => current.filter((b) => b.id !== batch.id));
+      toast.success("Batch deleted");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Could not delete");
+    }
   }
 
   return (
@@ -69,9 +88,35 @@ export default function BatchesPage() {
                 <CardHeader>
                   <div className="flex items-start justify-between gap-2">
                     <CardTitle className="truncate">{batch.name}</CardTitle>
-                    <span className="text-muted-foreground shrink-0 text-xs">
-                      {batch.studentCount} student{batch.studentCount === 1 ? "" : "s"}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <span className="text-muted-foreground text-xs">
+                        {batch.studentCount} student{batch.studentCount === 1 ? "" : "s"}
+                      </span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="size-7">
+                            <MoreHorizontal className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setCopyFrom(batch.id);
+                              setDialogOpen(true);
+                            }}
+                          >
+                            <Copy /> Copy to new term
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => setDeleting(batch)}
+                          >
+                            <Trash2 /> Delete batch
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                   <CardDescription className="line-clamp-2">
                     {batch.description || "No description"}
@@ -104,6 +149,17 @@ export default function BatchesPage() {
         batches={batches}
         copyFromId={copyFrom}
         onCreated={(batch) => setBatches((current) => [batch, ...current])}
+      />
+
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        title={`Delete “${deleting?.name ?? "this batch"}”?`}
+        description="This permanently removes the batch, its exams and all attempts. Students themselves are kept (they may belong to other batches). This cannot be undone."
+        confirmLabel="Delete batch"
+        onConfirm={async () => {
+          if (deleting) await removeBatch(deleting);
+        }}
       />
     </>
   );

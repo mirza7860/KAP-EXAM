@@ -2,11 +2,10 @@ import { z } from "zod";
 import { QUESTION_TYPES } from "./constants";
 
 /**
- * Question bank: topics -> subtopics -> questions, with reusable modules.
+ * Question bank: topics -> subtopics -> questions.
  *
- * A `module` is a saved, named collection of questions ("like Google Drive").
- * Exams compose from modules and/or individually picked questions. At publish
- * time the exam snapshots its paper, so later edits to a question never rewrite
+ * Topics and subtopics are the pools an exam draws from. At publish
+ * time the exam snapshots its paper, so later edits never rewrite
  * an already-given exam's history.
  */
 
@@ -126,29 +125,3 @@ export const topicInputSchema = z.object({
 export type TopicInput = z.infer<typeof topicInputSchema>;
 
 export const topicUpdateSchema = topicInputSchema.partial();
-
-export const questionModuleSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().trim().min(1).max(160),
-  description: z.string().max(2000).nullable().default(null),
-  parentId: z.string().min(1).nullable().default(null),
-  /** Ordered question ids in the module. */
-  questionIds: z.array(z.string().min(1)).default([]),
-  archivedAt: z.coerce.date().nullable().default(null),
-});
-
-export type QuestionModule = z.infer<typeof questionModuleSchema>;
-
-export const moduleInputSchema = z.object({
-  name: z.string().trim().min(1).max(160),
-  description: z.string().max(2000).nullable().default(null),
-  parentId: z.string().min(1).nullable().default(null),
-});
-export type ModuleInput = z.infer<typeof moduleInputSchema>;
-
-export const moduleUpdateSchema = moduleInputSchema.partial();
-
-export const moduleQuestionsInputSchema = z.object({
-  questionIds: z.array(z.string().min(1)).min(1),
-});
-export type ModuleQuestionsInput = z.infer<typeof moduleQuestionsInputSchema>;

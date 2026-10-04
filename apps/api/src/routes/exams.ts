@@ -34,6 +34,38 @@ function randomCode(length = 8): string {
   return code;
 }
 
+/** All topic ids in the subtree rooted at `rootId` (inclusive). */
+async function topicSubtree(db: Database, rootId: string): Promise<string[]> {
+  const rows = await db
+    .select({ id: schema.topics.id, parentId: schema.topics.parentId })
+    .from(schema.topics);
+  const ids = new Set<string>([rootId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const row of rows) {
+      if (row.parentId && ids.has(row.parentId) && !ids.has(row.id)) {
+        ids.add(row.id);
+        changed = true;
+      }
+    }
+  }
+  return [...ids];
+}
+
+/** Randomly take `count` ids (or all of them when count is omitted). */
+function shufflePick(ids: string[], count?: number): string[] {
+  if (count === undefined || count >= ids.length) return ids;
+  const copy = [...ids];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = copy[i]!;
+    copy[i] = copy[j]!;
+    copy[j] = tmp;
+  }
+  return copy.slice(0, count);
+}
+
 async function uniqueJoinCode(db: Database): Promise<string> {
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const code = randomCode();
@@ -177,25 +209,21 @@ examRoutes.post("/:id/compose", async (c) => {
   const parsed = examComposeSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw badRequest("Invalid composition", fields(parsed.error));
 
-  // Resolve modules to their questions, preserving module order, then add picks.
+  // Resolve each source to question ids, preserving order, then de-duplicate.
   const ordered: string[] = [];
-  if (parsed.data.moduleIds.length > 0) {
-    const moduleItems = await db
-      .select({
-        moduleId: schema.moduleQuestions.moduleId,
-        questionId: schema.moduleQuestions.questionId,
-        position: schema.moduleQuestions.position,
-      })
-      .from(schema.moduleQuestions)
-      .where(inArray(schema.moduleQuestions.moduleId, parsed.data.moduleIds))
-      .orderBy(asc(schema.moduleQuestions.position));
-    for (const moduleId of parsed.data.moduleIds) {
-      for (const item of moduleItems.filter((row) => row.moduleId === moduleId)) {
-        ordered.push(item.questionId);
-      }
+  for (const source of parsed.data.sources) {
+    if (source.kind === "questions") {
+      ordered.push(...source.questionIds);
+      continue;
     }
+    const subtopicIds =
+      source.kind === "subtopic" ? [source.subtopicId] : await topicSubtree(db, source.topicId);
+    const rows = await db
+      .select({ id: schema.questions.id })
+      .from(schema.questions)
+      .where(inArray(schema.questions.subtopicId, subtopicIds));
+    ordered.push(...shufflePick(rows.map((row) => row.id), source.count));
   }
-  ordered.push(...parsed.data.questionIds);
 
   const uniqueIds = [...new Set(ordered)];
   if (uniqueIds.length === 0) throw badRequest("Add at least one question");

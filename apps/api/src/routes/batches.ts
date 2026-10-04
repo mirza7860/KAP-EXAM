@@ -119,12 +119,15 @@ batchRoutes.patch("/:id", async (c) => {
 });
 
 batchRoutes.delete("/:id", async (c) => {
-  await c
-    .get("db")
-    .update(schema.batches)
-    .set({ archivedAt: new Date() })
-    .where(eq(schema.batches.id, c.req.param("id")));
-  return c.json({ data: { id: c.req.param("id"), archived: true } });
+  const db = c.get("db");
+  const id = c.req.param("id");
+  // Hard delete. Exams cascade via FK (exams.batchId onDelete cascade),
+  // which cascades to paper, attempts, answers, violations.
+  // Students are global and survive; only the membership is removed via cascade.
+  await db.delete(schema.batchStudents).where(eq(schema.batchStudents.batchId, id));
+  await db.delete(schema.exams).where(eq(schema.exams.batchId, id));
+  await db.delete(schema.batches).where(eq(schema.batches.id, id));
+  return c.json({ data: { id, deleted: true } });
 });
 
 batchRoutes.get("/:id/students", async (c) => {

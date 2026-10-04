@@ -23,11 +23,12 @@ export const attemptSchema = z.object({
 
 export type Attempt = z.infer<typeof attemptSchema>;
 
-/** A student joins by opening the link and giving name + roll no. No account. */
+/** A student joins by opening the link and giving roll no only. Name comes from roster. */
 export const joinAttemptSchema = z.object({
   joinCode: z.string().trim().min(4).max(32),
-  name: z.string().trim().min(2).max(80),
   rollNo: z.string().trim().min(1).max(32),
+  /** Optional for backwards compat; ignored when roster match is found. */
+  name: z.string().trim().min(1).max(80).optional(),
   /** Browser-generated; lets a reload resume the same attempt. */
   deviceToken: z.string().min(8).max(128),
 });

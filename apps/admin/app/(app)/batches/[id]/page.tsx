@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageBody, PageHeader } from "@/components/page-header";
+import { StudentProfile } from "@/components/student-profile";
 import { ArrowLeft, Loader2, Pencil, Plus, UserMinus } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -36,6 +37,7 @@ export default function BatchDetailPage() {
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [profileStudentId, setProfileStudentId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -119,13 +121,22 @@ export default function BatchDetailPage() {
               </TableHeader>
               <TableBody>
                 {batch.roster.map((entry) => (
-                  <TableRow key={entry.studentId}>
+                  <TableRow
+                    key={entry.studentId}
+                    className="cursor-pointer"
+                    onClick={() => setProfileStudentId(entry.studentId)}
+                  >
                     <TableCell className="font-mono text-xs">{entry.rollNo}</TableCell>
-                    <TableCell className="font-medium">{entry.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {entry.name}
+                      <span className="text-muted-foreground ml-2 text-xs font-normal">
+                        view report →
+                      </span>
+                    </TableCell>
                     <TableCell className="text-muted-foreground hidden text-sm sm:table-cell">
                       {new Date(entry.joinedAt).toLocaleDateString()}
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -155,6 +166,12 @@ export default function BatchDetailPage() {
             onOpenChange={setRenameOpen}
             batch={batch}
             onRenamed={(updated) => setBatch({ ...batch, ...updated })}
+          />
+          <StudentProfile
+            studentId={profileStudentId}
+            activeBatchId={batch.id}
+            open={profileStudentId !== null}
+            onOpenChange={(open) => !open && setProfileStudentId(null)}
           />
         </>
       )}
