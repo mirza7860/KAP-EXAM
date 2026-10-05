@@ -60,7 +60,7 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))" \
   | pnpm --filter @kap-exam/api exec wrangler secret put JWT_SECRET --env production
 
 # 3. Sanity check.
-curl https://<the-url-wrangler-printed>/health    # -> {"data":{"ok":true,"env":"production",...}}
+curl https://kap-exam-api.mirzasahil-dev.workers.dev/health    # -> {"data":{"ok":true,"env":"production",...}}
 ```
 
 Notes:
@@ -94,7 +94,7 @@ Environment variables — **set these before the first build**:
 
 | Name                    | Value                                    | Why |
 | ----------------------- | ---------------------------------------- | --- |
-| `NEXT_PUBLIC_API_URL`   | `https://<worker-host>`                  | Inlined into the client bundle at build time. Left unset it silently falls back to `http://localhost:8787`, which is the classic "works locally, blank page in prod" bug. |
+| `NEXT_PUBLIC_API_URL`   | `https://kap-exam-api.mirzasahil-dev.workers.dev`                  | Inlined into the client bundle at build time. Left unset it silently falls back to `http://localhost:8787`, which is the classic "works locally, blank page in prod" bug. |
 | `NEXT_PUBLIC_STUDENT_URL` | `https://kap-exam-student.vercel.app`  | Used to build the join link teachers share. |
 | `GEMINI_API_KEY`        | your key (optional)                      | Server-only, read by the AI question generator route. Without it the feature returns a clear error and nothing else breaks. |
 | `GEMINI_MODEL`          | optional                                 | Defaults to `gemini-3.5-flash-lite`. |
@@ -117,7 +117,7 @@ Because `NEXT_PUBLIC_*` is baked in at build time, changing a URL requires a
 
 | Name           | Value                     | Why |
 | -------------- | ------------------------- | --- |
-| `VITE_API_URL` | `https://<worker-host>`   | Also build-time. Falls back to `http://localhost:8787`. |
+| `VITE_API_URL` | `https://kap-exam-api.mirzasahil-dev.workers.dev`   | Also build-time. Falls back to `http://localhost:8787`. |
 
 `apps/student/vercel.json` already rewrites `/j/:code` to `index.html`. That one
 line is load-bearing: **exam join links are opened cold** — scanned from a QR
@@ -160,7 +160,7 @@ so and it can be built.
 ## 5. Verify after every deploy
 
 ```sh
-curl https://<worker-host>/health                  # env must say "production"
+curl https://kap-exam-api.mirzasahil-dev.workers.dev/health                  # env must say "production"
 ```
 
 Then in a browser, with devtools open:
