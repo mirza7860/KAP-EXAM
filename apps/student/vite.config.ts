@@ -29,12 +29,30 @@ export default defineConfig({
         id: "/",
         // PNGs first: installability on Android wants a real 192/512 raster,
         // and iOS ignores SVG entirely. The maskable tile is opaque edge to
-        // edge because the launcher crops it over the wallpaper.
+        // edge because the launcher crops it over the wallpaper. icon.svg
+        // stays for the favicon but is deliberately not listed here - Chrome
+        // cannot use an SVG in the install UI and reports it as failed.
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
           { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-          { src: "/icon.svg", sizes: "any", type: "image/svg+xml" },
+        ],
+        // Real captures of the join screen. The richer install dialog wants
+        // one wide shot for desktop and one narrow for mobile; without them
+        // Chrome falls back to the plain name-and-icon dialog.
+        screenshots: [
+          {
+            src: "/screenshots/desktop-wide.png",
+            sizes: "1280x720",
+            type: "image/png",
+            form_factor: "wide",
+          },
+          {
+            src: "/screenshots/mobile-narrow.png",
+            sizes: "720x1280",
+            type: "image/png",
+            form_factor: "narrow",
+          },
         ],
       },
       workbox: {
