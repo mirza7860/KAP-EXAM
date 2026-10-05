@@ -46,20 +46,30 @@ migration is the normal flow.
 
 ---
 
-## 1. Deploy the Worker
+## 1. Deploy the Worker — **done**
+
+`kap-exam-api` is live at `https://kap-exam-api.mirzasahil-dev.workers.dev`
+(version `9383c52a`), with `JWT_SECRET` already set to a machine-generated key.
+Health, CORS and the signup gate were all verified against the live URL.
+
+The first deploy only had to happen once, and the secret could only be set
+after it — `wrangler secret put` needs an existing script — which is why they
+were done back to back.
+
+To **rotate** the secret (also what you'd re-run after a suspected leak — a
+token signed with a leaked secret is accepted until this is done):
 
 ```sh
-cd apps/api
-
-# 1. Create the script. Auth is broken until step 2 runs, so do this back to back.
-pnpm --filter @kap-exam/api deploy:prod     # = wrangler deploy --env production
-
-# 2. The Worker refuses every session without this. It cannot be set first:
-#    `wrangler secret put` needs an existing script.
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))" \
   | pnpm --filter @kap-exam/api exec wrangler secret put JWT_SECRET --env production
+```
 
-# 3. Sanity check.
+This takes effect immediately and signs every existing teacher out (their token
+stops verifying), so do it in a quiet moment.
+
+Sanity check:
+
+```sh
 curl https://kap-exam-api.mirzasahil-dev.workers.dev/health    # -> {"data":{"ok":true,"env":"production",...}}
 ```
 
