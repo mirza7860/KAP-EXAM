@@ -235,6 +235,8 @@ export interface ExamSummary {
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
   lockToDevice: boolean;
+  /** Stamped once, by the teacher, when the answer key is released. One way. */
+  revealedAt?: string | null;
 }
 
 export interface PaperItem {
@@ -262,6 +264,33 @@ export interface ExamLiveState {
     lastSeenAt: number;
   }[];
   violations: { attemptId: string; type: string; receivedAt: number }[];
+}
+
+/** One finished attempt, ranked for the classroom display. */
+export interface LeaderboardEntry {
+  rank: number;
+  attemptId: string;
+  studentId: string;
+  name: string;
+  rollNo: string;
+  status: string;
+  score: number;
+  maxScore: number;
+  correct: number;
+  wrong: number;
+  unattempted: number;
+  violationCount: number;
+}
+
+/** Projected once the teacher reveals: podium + scrollable board. */
+export interface Leaderboard {
+  examId: string;
+  revealedAt: string | null;
+  /** Everyone enrolled in the batch, not just those who turned up. */
+  cohortSize: number;
+  appeared: number;
+  maxScore: number;
+  entries: LeaderboardEntry[];
 }
 
 export const examApi = {
@@ -297,7 +326,10 @@ export const examApi = {
     ),
   publish: (id: string) => api.post<ExamSummary>(`/api/exams/${id}/publish`, {}),
   close: (id: string) => api.post<ExamSummary>(`/api/exams/${id}/close`, {}),
+  /** Release the answer key. Irreversible. */
+  reveal: (id: string) => api.post<ExamDetail>(`/api/exams/${id}/reveal`, {}),
   live: (id: string) => api.get<ExamLiveState>(`/api/exams/${id}/live`),
+  leaderboard: (id: string) => api.get<Leaderboard>(`/api/exams/${id}/leaderboard`),
 };
 
 // ---------------------------------------------------------------------------

@@ -29,6 +29,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Copy,
+  Eye,
   Loader2,
   Pencil,
   Radio,
@@ -60,7 +61,7 @@ export default function ExamDetailPage() {
   const [sources, setSources] = useState<SourceDraft[]>([]);
   const [savingPaper, setSavingPaper] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [confirm, setConfirm] = useState<"publish" | "close" | null>(null);
+  const [confirm, setConfirm] = useState<"publish" | "close" | "reveal" | null>(null);
   const [pending, setPending] = useState(false);
   const [live, setLive] = useState<ExamLiveState | null>(null);
 
@@ -112,9 +113,13 @@ export default function ExamDetailPage() {
         setConfirm(null);
         router.push(`/host/${examId}`);
         return;
-      } else {
+      }
+      if (confirm === "close") {
         await examApi.close(examId);
         toast.success("Exam closed");
+      } else {
+        await examApi.reveal(examId);
+        toast.success("Answers released — marks and the leaderboard are live");
       }
       setConfirm(null);
       await load();
@@ -183,13 +188,15 @@ export default function ExamDetailPage() {
                 </Button>
               </>
             )}
+            {exam && (exam.status === "published" || (exam.status === "closed" && !!exam.revealedAt)) && (
+              <Button size="sm" asChild>
+                <Link href={`/host/${exam.id}`}>
+                  <Radio className="size-4" /> Display
+                </Link>
+              </Button>
+            )}
             {exam?.status === "published" && (
               <>
-                <Button size="sm" asChild>
-                  <Link href={`/host/${exam.id}`}>
-                    <Radio className="size-4" /> Display
-                  </Link>
-                </Button>
                 <Button size="sm" onClick={() => setShareOpen(true)}>
                   <Share2 className="size-4" /> Share
                 </Button>
@@ -197,6 +204,17 @@ export default function ExamDetailPage() {
                   <Square className="size-4" /> Close now
                 </Button>
               </>
+            )}
+            {exam && exam.status !== "draft" && (
+              exam.revealedAt ? (
+                <Badge variant="success" className="h-8 px-3">
+                  Answers released
+                </Badge>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => setConfirm("reveal")}>
+                  <Eye className="size-4" /> Reveal answers
+                </Button>
+              )
             )}
           </div>
         }
@@ -362,13 +380,23 @@ export default function ExamDetailPage() {
           <ConfirmDialog
             open={confirm !== null}
             onOpenChange={(open) => !open && setConfirm(null)}
-            title={confirm === "publish" ? "Publish this exam?" : "Close this exam now?"}
+            title={
+              confirm === "publish"
+                ? "Publish this exam?"
+                : confirm === "reveal"
+                  ? "Reveal answers to students?"
+                  : "Close this exam now?"
+            }
             description={
               confirm === "publish"
                 ? "The paper is frozen and the link goes live. Past report cards can never change after this."
-                : "Anyone still working is timed out and no one else can join."
+                : confirm === "reveal"
+                  ? "Every student immediately gets their marks, the correct answer to each question and the explanation. This cannot be undone — check everyone has finished first."
+                  : "Anyone still working is timed out and no one else can join."
             }
-            confirmLabel={confirm === "publish" ? "Publish" : "Close exam"}
+            confirmLabel={
+              confirm === "publish" ? "Publish" : confirm === "reveal" ? "Reveal answers" : "Close exam"
+            }
             destructive={confirm === "close"}
             onConfirm={onConfirm}
           />

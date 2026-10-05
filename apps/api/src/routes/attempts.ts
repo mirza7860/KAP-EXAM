@@ -29,6 +29,8 @@ async function loadPaperQuestions(db: Database, examId: string): Promise<Questio
   return items.map((it) => JSON.parse(it.snapshotJson) as Question);
 }
 
+type AnswerRow = typeof schema.answers.$inferSelect;
+
 /** Score an attempt from the frozen paper + saved answers (re-graded from snapshots). */
 async function scoreAttempt(db: Database, attemptId: string, examId: string) {
   const paperQuestions = await loadPaperQuestions(db, examId);
@@ -327,7 +329,10 @@ attemptRoutes.post("/answer", async (c) => {
   // Best-effort presence update in DO
   await callExamSession(c.env, attempt.examId, "/answer", body).catch(() => undefined);
 
-  return c.json({ data: { ok: true, awardedMarks: grade.awardedMarks, isCorrect: grade.isCorrect } });
+  // No verdict in the response: telling a student "wrong" as they tap an
+  // option is the answer key by another name. Grading still happens and is
+  // stored — it just stays hidden until reveal.
+  return c.json({ data: { ok: true } });
 });
 
 attemptRoutes.post("/submit", async (c) => {
@@ -340,7 +345,7 @@ attemptRoutes.post("/submit", async (c) => {
   }
 
   // Finalize scoring from frozen paper + saved answers
-  const { score, maxScore, correct, wrong, unattempted } = await scoreAttempt(db, attempt.id, attempt.examId);
+  const { score, maxScore } = await scoreAttempt(db, attempt.id, attempt.examId);
 
   // persist normalized grading per answer
   const paperQuestions = await loadPaperQuestions(db, attempt.examId);
@@ -369,7 +374,11 @@ attemptRoutes.post("/submit", async (c) => {
 
   await callExamSession(c.env, attempt.examId, "/submit", { attemptId: attempt.id }).catch(() => undefined);
 
-  return c.json({ data: { ok: true, score, maxScore, correct, wrong, unattempted } });
+  // Deliberately no score here. Marks are withheld until the teacher reveals
+  // (GET /:id is the only place they exist, and only once released) — a
+  // student should not be able to read their result off the network response
+  // the instant they submit.
+  return c.json({ data: { ok: true } });
 });
 
 attemptRoutes.post("/violation", async (c) => {
@@ -385,32 +394,79 @@ attemptRoutes.post("/violation", async (c) => {
   return c.json(result.data, result.status as 200);
 });
 
-/** Read-only attempt state for resume / result screen. Closed attempts include the breakdown. */
+/**
+ * The per-question review a student may only see once their teacher has
+ * released the paper: what they picked, what the answer actually was, what it
+ * was worth, and the explanation if the bank has one.
+ *
+ * Options go through `sanitizeForStudent` (without shuffling) purely so a
+ * true/false question that stored no options still has True/False to show —
+ * at this point the correct answer is deliberately *included*.
+ */
+function buildReview(paperQuestions: Question[], saved: AnswerRow[]) {
+  const byQ = new Map(saved.map((a) => [a.questionId, a]));
+  return paperQuestions.map((q, position) => {
+    const answer = byQ.get(q.id);
+    let selected: string[] = [];
+    try {
+      selected = answer ? (JSON.parse(answer.selectedJson as string) as string[]) : [];
+    } catch {
+      selected = [];
+    }
+    return {
+      position,
+      questionId: q.id,
+      type: q.type,
+      prompt: q.prompt,
+      mediaKey: q.mediaKey,
+      marks: q.marks,
+      options: sanitizeForStudent(q, false).options,
+      correctOptionIds: q.correctOptionIds ?? [],
+      correctNumber: q.correctNumber ?? null,
+      numericTolerance: q.numericTolerance ?? null,
+      explanation: q.explanation ?? null,
+      yourSelectedOptionIds: selected,
+      yourNumericValue: answer?.numericValue ?? null,
+      isCorrect: answer?.isCorrect ?? null,
+      awardedMarks: answer?.awardedMarks ?? 0,
+    };
+  });
+}
+
+async function loadAnswers(db: Database, attemptId: string) {
+  return db.select().from(schema.answers).where(eq(schema.answers.attemptId, attemptId));
+}
+
+/** Read-only attempt state for resume / result screen. Scores and the answer
+ *  key are withheld until the exam is revealed. */
 attemptRoutes.get("/:id", async (c) => {
   const db = c.get("db");
   const attempt = await resolveAttempt(c, c.req.param("id"));
   const exam = await db.select().from(schema.exams).where(eq(schema.exams.id, attempt.examId)).get();
   const student = await db.select().from(schema.students).where(eq(schema.students.id, attempt.studentId)).get();
   const paperQuestions = await loadPaperQuestions(db, attempt.examId);
-  const saved = await db.select().from(schema.answers).where(eq(schema.answers.attemptId, attempt.id));
+  const saved = await loadAnswers(db, attempt.id);
   const maxScore = paperQuestions.reduce((s, q) => s + q.marks, 0);
-  const result =
-    attempt.status === "in_progress"
-      ? null
-      : await scoreAttempt(db, attempt.id, attempt.examId);
+
+  /** Still writing? Never released, no matter what the teacher has done. */
+  const released = attempt.status !== "in_progress" && !!exam?.revealedAt;
+  const result = released ? await scoreAttempt(db, attempt.id, attempt.examId) : null;
+
   return c.json({
     data: {
       attempt: {
         id: attempt.id,
         status: attempt.status,
-        score: attempt.score ?? result?.score ?? null,
+        score: released ? (attempt.score ?? result?.score ?? null) : null,
         submittedAt: attempt.submittedAt,
       },
       exam: exam ? { id: exam.id, title: exam.title } : null,
       student: student ? { name: student.name, rollNo: student.rollNo } : null,
       maxScore,
       answeredCount: saved.length,
+      revealed: released,
       result,
+      review: released ? buildReview(paperQuestions, saved) : null,
     },
   });
 });

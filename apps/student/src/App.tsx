@@ -1,6 +1,6 @@
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Logo, MathText, Progress, Toaster, toast } from "@kap-exam/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Logo, MathText, Progress, Separator, Toaster, toast } from "@kap-exam/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { codeFromLocation, mediaUrl, studentApi, StudentApiError, type JoinData } from "./lib/api";
+import { codeFromLocation, mediaUrl, studentApi, StudentApiError, type JoinData, type ReviewItem } from "./lib/api";
 
 type Phase = "join" | "exam" | "done";
 
@@ -27,6 +27,10 @@ export default function App() {
   const [answers, setAnswers] = useState<Record<string, { selectedOptionIds: string[]; numericValue: number | null }>>({});
   const [numericDraft, setNumericDraft] = useState("");
   const [result, setResult] = useState<{ score: number; maxScore: number; correct: number; wrong: number; unattempted: number } | null>(null);
+  const [review, setReview] = useState<ReviewItem[] | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [examTitle, setExamTitle] = useState<string | null>(null);
   const [alreadyFinished, setAlreadyFinished] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -41,6 +45,33 @@ export default function App() {
     return () => clearInterval(t);
   }, [phase]);
   void now;
+
+  /**
+   * Marks and the answer key only exist once the teacher releases them —
+   * `GET /attempts/:id` answers `revealed: false` with no breakdown until
+   * then. So a submitted student sits in a waiting state that quietly checks
+   * back, and their screen flips over the moment the reveal lands.
+   */
+  const refreshResult = useCallback(async (id: string) => {
+    try {
+      const prev = await studentApi.attempt(id);
+      if (!prev.revealed) return;
+      setResult(prev.result);
+      setReview(prev.review);
+      setRevealed(true);
+      if (prev.student?.name) setName(prev.student.name);
+      if (prev.exam?.title) setExamTitle(prev.exam.title);
+    } catch {
+      /* transient — the next tick will catch up */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "done" || revealed || !attemptId) return;
+    void refreshResult(attemptId);
+    const t = setInterval(() => void refreshResult(attemptId), 5000);
+    return () => clearInterval(t);
+  }, [phase, revealed, attemptId, refreshResult]);
 
   // auto-submit at deadline
   useEffect(() => {
@@ -125,18 +156,23 @@ export default function App() {
       setClockOffset(data.serverNow - Date.now());
       setIndex(0);
       setName(data.student.name);
+      setExamTitle(data.exam.title);
       setAlreadyFinished(false);
       setPhase("exam");
     } catch (err) {
       // Friendly rejoin: a finished attempt shows its score instead of a raw error.
       if (err instanceof StudentApiError && (err.code === "already_submitted" || err.code === "attempt_locked")) {
-        const attemptId = err.fields?.attemptId?.[0];
-        if (attemptId) {
+        const savedId = err.fields?.attemptId?.[0];
+        if (savedId) {
           try {
-            const prev = await studentApi.attempt(attemptId);
-            if (prev.result) {
+            const prev = await studentApi.attempt(savedId);
+            if (prev.attempt.status !== "in_progress") {
+              setAttemptId(savedId);
               setResult(prev.result);
+              setReview(prev.review);
+              setRevealed(prev.revealed);
               setName(prev.student?.name ?? name);
+              if (prev.exam?.title) setExamTitle(prev.exam.title);
               setAlreadyFinished(true);
               setPhase("done");
               return;
@@ -177,9 +213,12 @@ export default function App() {
     if (!join || busy) return;
     setBusy(true);
     try {
-      const r = await studentApi.submit(join.attemptId);
-      setResult(r);
+      await studentApi.submit(join.attemptId);
+      setAttemptId(join.attemptId);
       setPhase("done");
+      // The response carries no score by design — this is what fetches the
+      // result later, once the teacher has released the paper.
+      void refreshResult(join.attemptId);
       if (auto) toast.message("Time is up — submitted automatically");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Submit failed");
@@ -207,39 +246,67 @@ export default function App() {
 
   if (phase === "done") {
     return (
-      <main className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center gap-6 p-6">
+      <main className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-center gap-6 p-6">
         <div className="flex flex-col items-center gap-2 text-center">
           <Logo height={30} />
           <h1 className="display text-3xl font-semibold">
-            {alreadyFinished ? "Already submitted" : "Submitted"}
+            {revealed ? "Your result" : alreadyFinished ? "Already submitted" : "Submitted"}
           </h1>
           <p className="text-muted-foreground text-sm">
-            {alreadyFinished
-              ? "You finished this exam earlier — here is your result."
-              : "Your teacher has your answers."}
+            {revealed
+              ? (examTitle ?? "Your answers have been marked.")
+              : alreadyFinished
+                ? "Your answers are with your teacher."
+                : "Your teacher has your answers."}
           </p>
         </div>
-        {result && (
+
+        {revealed && result ? (
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle className="stat-figure text-center text-5xl">
+                  {result.score}
+                  <span className="text-muted-foreground text-xl">/{result.maxScore}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex justify-center gap-8 text-center text-sm">
+                <span>
+                  <strong className="stat-figure block text-xl">{result.correct}</strong>
+                  <span className="text-muted-foreground">correct</span>
+                </span>
+                <span>
+                  <strong className="stat-figure block text-xl">{result.wrong}</strong>
+                  <span className="text-muted-foreground">wrong</span>
+                </span>
+                <span>
+                  <strong className="stat-figure block text-xl">{result.unattempted}</strong>
+                  <span className="text-muted-foreground">skipped</span>
+                </span>
+              </CardContent>
+            </Card>
+
+            {review && review.length > 0 && (
+              <section className="space-y-3">
+                <p className="eyebrow">Answer review</p>
+                {review.map((item) => (
+                  <ReviewCard key={item.questionId} item={item} />
+                ))}
+              </section>
+            )}
+          </>
+        ) : (
           <Card>
-            <CardHeader>
-              <CardTitle className="stat-figure text-center text-5xl">
-                {result.score}
-                <span className="text-muted-foreground text-xl">/{result.maxScore}</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex justify-center gap-8 text-center text-sm">
-              <span>
-                <strong className="stat-figure block text-xl">{result.correct}</strong>
-                <span className="text-muted-foreground">correct</span>
-              </span>
-              <span>
-                <strong className="stat-figure block text-xl">{result.wrong}</strong>
-                <span className="text-muted-foreground">wrong</span>
-              </span>
-              <span>
-                <strong className="stat-figure block text-xl">{result.unattempted}</strong>
-                <span className="text-muted-foreground">skipped</span>
-              </span>
+            <CardContent className="space-y-2 px-5 py-8 text-center">
+              <p className="display text-2xl font-semibold">Waiting for results</p>
+              <p className="text-muted-foreground mx-auto max-w-xs text-sm">
+                Your answers are submitted. Your teacher will release the marks shortly — this
+                screen updates on its own.
+              </p>
+              <p className="text-muted-foreground flex items-center justify-center gap-2 pt-3 text-xs">
+                <span className="bg-primary inline-block size-1.5 animate-pulse rounded-full" />
+                Checking for your result…
+              </p>
             </CardContent>
           </Card>
         )}
@@ -476,5 +543,108 @@ export default function App() {
       </Card>
       <Toaster />
     </main>
+  );
+}
+
+/** What the student put down, as readable text. */
+function yourAnswerText(item: ReviewItem): string {
+  if (item.type === "numeric") {
+    return item.yourNumericValue === null ? "Not answered" : String(item.yourNumericValue);
+  }
+  const chosen = item.options.filter((o) => item.yourSelectedOptionIds.includes(o.id));
+  if (chosen.length === 0) return "Not answered";
+  return chosen.map((o) => o.text).join("  ·  ");
+}
+
+/** The answer key, as readable text. */
+function correctAnswerText(item: ReviewItem): string {
+  if (item.type === "numeric") {
+    const base = item.correctNumber ?? 0;
+    const tolerance = item.numericTolerance ?? 0;
+    return tolerance > 0 ? `${base} ± ${tolerance}` : String(base);
+  }
+  const right = item.options.filter((o) => item.correctOptionIds.includes(o.id));
+  return right.length > 0 ? right.map((o) => o.text).join("  ·  ") : "—";
+}
+
+/**
+ * One graded question. Shown only after the teacher releases the paper: what
+ * you picked, what it should have been, what it was worth, and the
+ * explanation if the bank has one.
+ */
+function ReviewCard({ item }: { item: ReviewItem }) {
+  const skipped = item.isCorrect === null;
+  const correct = item.isCorrect === true;
+  const verdict = skipped ? "secondary" : correct ? "success" : "destructive";
+  const label = skipped ? "Skipped" : correct ? "Correct" : "Incorrect";
+  const edge = skipped
+    ? "border-l-border"
+    : correct
+      ? "border-l-emerald-500"
+      : "border-l-destructive";
+
+  return (
+    <Card className={`border-l-4 ${edge}`}>
+      <CardContent className="space-y-3 pt-5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground text-xs font-medium">
+            Question {item.position + 1}
+          </span>
+          <Badge variant={verdict}>{label}</Badge>
+        </div>
+
+        <p className="text-[15px] leading-relaxed">
+          <MathText>{item.prompt}</MathText>
+        </p>
+        {item.mediaKey && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={mediaUrl(item.mediaKey)}
+            alt="Question diagram"
+            className="max-h-56 w-full rounded-lg border object-contain"
+          />
+        )}
+
+        <div className="space-y-3 rounded-lg border p-3">
+          <div>
+            <p className="text-muted-foreground text-xs">You answered</p>
+            <p
+              className={`text-sm ${
+                skipped
+                  ? "text-muted-foreground italic"
+                  : correct
+                    ? ""
+                    : "text-destructive font-medium"
+              }`}
+            >
+              <MathText>{yourAnswerText(item)}</MathText>
+            </p>
+          </div>
+          <Separator />
+          <div>
+            <p className="text-muted-foreground text-xs">Correct answer</p>
+            <p className="text-sm font-medium">
+              <MathText>{correctAnswerText(item)}</MathText>
+            </p>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground text-xs">Marks awarded</span>
+            <span className="stat-figure text-base tabular-nums">
+              {item.awardedMarks}
+              <span className="text-muted-foreground text-xs">/{item.marks}</span>
+            </span>
+          </div>
+        </div>
+
+        {item.explanation && (
+          <div className="bg-muted/70 rounded-lg p-3">
+            <p className="eyebrow mb-1.5">Explanation</p>
+            <p className="text-sm leading-relaxed">
+              <MathText>{item.explanation}</MathText>
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

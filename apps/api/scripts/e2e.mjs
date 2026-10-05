@@ -1,6 +1,6 @@
 /**
  * End-to-end API regression: auth -> bank -> batch+roster -> exam ->
- * compose -> publish -> roll-only join -> answer -> submit -> reports.
+ * compose -> publish -> roll-only join -> answer -> submit -> reveal -> reports.
  * Usage: node scripts/e2e.mjs [baseUrl]   (expects a local wrangler dev server)
  * Exits non-zero on the first failed assertion.
  */
@@ -116,17 +116,50 @@ let attemptId;
   const paper = join.body.data.paper;
   for (const q of paper) {
     if (q.type === "numeric") {
-      await api("POST", "/api/attempts/answer", { attemptId, questionId: q.id, selectedOptionIds: [], numericValue: 42 });
+      const a = await api("POST", "/api/attempts/answer", { attemptId, questionId: q.id, selectedOptionIds: [], numericValue: 42 });
+      check("answer save returns no verdict", !("isCorrect" in (a.body?.data ?? {})));
     } else {
-      await api("POST", "/api/attempts/answer", { attemptId, questionId: q.id, selectedOptionIds: ["b"], numericValue: null });
+      const a = await api("POST", "/api/attempts/answer", { attemptId, questionId: q.id, selectedOptionIds: ["b"], numericValue: null });
+      check("answer save returns no verdict", !("isCorrect" in (a.body?.data ?? {})));
     }
   }
   const sub = await api("POST", "/api/attempts/submit", { attemptId });
-  check("submit scores 10/10", sub.body.data.score === 10 && sub.body.data.maxScore === 10);
+  check("submit returns no score", sub.body.data.ok === true && !("score" in sub.body.data));
   const rejoin = await api("POST", "/api/attempts/join", { joinCode, rollNo: "E2E-01", deviceToken: "e2e-device" });
   check("rejoin after submit is 409 with attemptId", rejoin.status === 409 && rejoin.body.error.fields?.attemptId?.[0] === attemptId);
   const prev = await api("GET", `/api/attempts/${attemptId}`);
-  check("result fetch shows breakdown", prev.body.data.result?.score === 10);
+  check(
+    "result withheld before reveal",
+    prev.body.data.revealed === false && prev.body.data.result === null && prev.body.data.review === null,
+  );
+}
+
+// reveal: leaderboard, then the key reaches the student
+{
+  const board = await api("GET", `/api/exams/${exam.id}/leaderboard`);
+  check(
+    "leaderboard ranks the cohort",
+    board.body.data.revealedAt === null &&
+      board.body.data.entries[0]?.rank === 1 &&
+      board.body.data.entries[0]?.score === 10 &&
+      board.body.data.cohortSize === 1,
+  );
+
+  const rev = await api("POST", `/api/exams/${exam.id}/reveal`, {});
+  check("reveal stamps the exam", rev.status === 200 && !!rev.body.data.revealedAt);
+  const again = await api("POST", `/api/exams/${exam.id}/reveal`, {});
+  check("reveal is one way", again.status === 200 && again.body.data.revealedAt === rev.body.data.revealedAt);
+
+  const after = await api("GET", `/api/attempts/${attemptId}`);
+  check("result appears after reveal", after.body.data.revealed === true && after.body.data.result?.score === 10);
+  const review = after.body.data.review ?? [];
+  check(
+    "review carries the key",
+    review.length === 2 && review.some((r) => r.correctOptionIds?.includes("b")) && review.every((r) => "awardedMarks" in r),
+  );
+
+  const detail = await api("GET", `/api/exams/${exam.id}`);
+  check("exam detail reports revealedAt", !!detail.body.data.revealedAt);
 }
 
 // reports + pagination envelope

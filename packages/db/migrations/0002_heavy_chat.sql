@@ -1,0 +1,1 @@
+ALTER TABLE `exams` ADD `revealed_at` integer;

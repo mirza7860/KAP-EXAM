@@ -12,6 +12,7 @@ import { callExamSession } from "../lib/durable.js";
 import { badRequest, notFound } from "../lib/http.js";
 import { paginate, pageParams } from "../lib/pagination.js";
 import { deserializeQuestion } from "../lib/question.js";
+import { scoreAttempts } from "../lib/scoring.js";
 
 /**
  * Exams.
@@ -24,6 +25,23 @@ export const examRoutes = new Hono<AppBindings>();
 
 function fields(error: { flatten: () => { fieldErrors: unknown } }) {
   return error.flatten().fieldErrors as Record<string, string[]>;
+}
+
+/** One row on the projected leaderboard. `rank` is filled in after sorting. */
+interface LeaderboardEntry {
+  rank: number;
+  attemptId: string;
+  studentId: string;
+  name: string;
+  rollNo: string;
+  status: string;
+  score: number;
+  maxScore: number;
+  correct: number;
+  wrong: number;
+  unattempted: number;
+  violationCount: number;
+  submittedAt: number;
 }
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -320,6 +338,110 @@ examRoutes.post("/:id/close", async (c) => {
 
   const row = await db.select().from(schema.exams).where(eq(schema.exams.id, id)).get();
   return c.json({ data: row });
+});
+
+/**
+ * Release the answer key. One way by design — the instant this is stamped the
+ * API stops withholding scores and correct answers from students, and there is
+ * no route to take it back down (an answer key that can be recalled is an
+ * answer key students screenshot first).
+ *
+ * Timing is the teacher's call: if everyone has finished, they may reveal.
+ */
+examRoutes.post("/:id/reveal", async (c) => {
+  const db = c.get("db");
+  const id = c.req.param("id");
+  const exam = await db.select().from(schema.exams).where(eq(schema.exams.id, id)).get();
+  if (!exam) throw notFound("Exam not found");
+  if (exam.status === "draft") throw badRequest("Publish the exam before revealing answers");
+  if (exam.revealedAt) return c.json({ data: exam });
+
+  await db.update(schema.exams).set({ revealedAt: new Date() }).where(eq(schema.exams.id, id));
+  const row = await db.select().from(schema.exams).where(eq(schema.exams.id, id)).get();
+  return c.json({ data: row });
+});
+
+/**
+ * Ranked cohort for the classroom display. Only students who actually
+ * finished are on the board; ties share a rank. Graded with the same
+ * `scoreAttempts` the report card uses.
+ */
+examRoutes.get("/:id/leaderboard", async (c) => {
+  const db = c.get("db");
+  const id = c.req.param("id");
+  const exam = await db.select().from(schema.exams).where(eq(schema.exams.id, id)).get();
+  if (!exam) throw notFound("Exam not found");
+
+  const attempts = await db.select().from(schema.attempts).where(eq(schema.attempts.examId, id));
+  const seated = await db
+    .select({ studentId: schema.batchStudents.studentId })
+    .from(schema.batchStudents)
+    .where(eq(schema.batchStudents.batchId, exam.batchId));
+
+  const finished = attempts.filter((a) => a.status !== "in_progress" && a.status !== "abandoned");
+  if (finished.length === 0) {
+    return c.json({
+      data: {
+        examId: id,
+        revealedAt: exam.revealedAt,
+        cohortSize: seated.length,
+        appeared: 0,
+        maxScore: 0,
+        entries: [],
+      },
+    });
+  }
+
+  const students = await db
+    .select()
+    .from(schema.students)
+    .where(inArray(schema.students.id, finished.map((a) => a.studentId)));
+  const byStudent = new Map(students.map((s) => [s.id, s]));
+  const scores = await scoreAttempts(db, finished.map((a) => ({ id: a.id, examId: a.examId })));
+
+  const entries: LeaderboardEntry[] = finished.map((a) => {
+    const student = byStudent.get(a.studentId);
+    const sc = scores.get(a.id) ?? { score: 0, maxScore: 0, correct: 0, wrong: 0, unattempted: 0 };
+    return {
+      rank: 0,
+      attemptId: a.id,
+      studentId: a.studentId,
+      name: student?.name ?? "Unknown",
+      rollNo: student?.rollNo ?? "",
+      status: a.status,
+      score: a.score ?? sc.score,
+      maxScore: sc.maxScore,
+      correct: sc.correct,
+      wrong: sc.wrong,
+      unattempted: sc.unattempted,
+      violationCount: a.violationCount ?? 0,
+      submittedAt: a.submittedAt ? a.submittedAt.getTime() : Number.MAX_SAFE_INTEGER,
+    };
+  });
+
+  entries.sort((a, b) => b.score - a.score || a.submittedAt - b.submittedAt || a.rollNo.localeCompare(b.rollNo));
+
+  let rank = 0;
+  let previous: number | null = null;
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i]!;
+    if (entry.score !== previous) {
+      rank = i + 1;
+      previous = entry.score;
+    }
+    entry.rank = rank;
+  }
+
+  return c.json({
+    data: {
+      examId: id,
+      revealedAt: exam.revealedAt,
+      cohortSize: seated.length,
+      appeared: entries.length,
+      maxScore: entries.reduce((m, e) => Math.max(m, e.maxScore), 0),
+      entries,
+    },
+  });
 });
 
 /** Live roster + violations, read straight from the exam's Durable Object. */

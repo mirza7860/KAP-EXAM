@@ -78,13 +78,39 @@ export function getDeviceToken(): string {
   return t;
 }
 
+/**
+ * One question after the teacher has released the paper: what the student
+ * picked, what the answer actually was, and the explanation if the bank has
+ * one. `null` until `revealed` — never sent before that.
+ */
+export interface ReviewItem {
+  position: number;
+  questionId: string;
+  type: StudentQuestion["type"];
+  prompt: string;
+  mediaKey: string | null;
+  marks: number;
+  options: { id: string; text: string }[];
+  correctOptionIds: string[];
+  correctNumber: number | null;
+  numericTolerance: number | null;
+  explanation: string | null;
+  yourSelectedOptionIds: string[];
+  yourNumericValue: number | null;
+  isCorrect: boolean | null;
+  awardedMarks: number;
+}
+
 export interface AttemptResult {
   attempt: { id: string; status: string; score: number | null; submittedAt: string | null };
   exam: { id: string; title: string } | null;
   student: { name: string; rollNo: string } | null;
   maxScore: number;
   answeredCount: number;
+  /** False while the paper is still with the teacher. */
+  revealed: boolean;
   result: { score: number; maxScore: number; correct: number; wrong: number; unattempted: number } | null;
+  review: ReviewItem[] | null;
 }
 
 export const studentApi = {
@@ -103,11 +129,8 @@ export const studentApi = {
       "/api/attempts/heartbeat",
       { attemptId, clientNow: Date.now(), answeredCount },
     ),
-  submit: (attemptId: string) =>
-    req<{ ok: boolean; score: number; maxScore: number; correct: number; wrong: number; unattempted: number }>(
-      "/api/attempts/submit",
-      { attemptId },
-    ),
+  /** Deliberately returns no score — marks only exist once revealed. */
+  submit: (attemptId: string) => req<{ ok: boolean }>("/api/attempts/submit", { attemptId }),
   violation: (attemptId: string, type: string, detail?: string) =>
     req("/api/attempts/violation", { attemptId, type, occurredAt: Date.now(), detail }).catch(
       () => undefined,

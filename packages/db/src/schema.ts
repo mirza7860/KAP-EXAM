@@ -168,6 +168,14 @@ export const exams = sqliteTable(
     createdAt: ts("created_at").notNull().default(now),
     publishedAt: ts("published_at"),
     closedAt: ts("closed_at"),
+    /**
+     * Set once, by the teacher, when they release the paper. Before this the
+     * API withholds every score and every correct answer from students; after
+     * it they get their marks and a full per-question review. One way — there
+     * is deliberately no "hide" (an answer key that can be recalled is an
+     * answer key students screenshot first).
+     */
+    revealedAt: ts("revealed_at"),
   },
   (t) => [
     uniqueIndex("exams_join_code_unique").on(t.joinCode),
