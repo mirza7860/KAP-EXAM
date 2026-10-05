@@ -20,7 +20,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pagination } from "@/components/pagination";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ApiError, reportApi, type StudentReportData } from "@/lib/api";
 
@@ -100,28 +100,23 @@ function ProfileBody({ studentId, activeBatchId }: { studentId: string; activeBa
       <SheetHeader>
         <SheetTitle>{report.name}</SheetTitle>
         <SheetDescription>
-          Roll {report.rollNo} · {report.examsTaken} taken · {report.examsMissed} missed
+          Roll <span className="font-mono">{report.rollNo}</span> · {report.examsTaken} taken ·{" "}
+          {report.examsMissed} missed
         </SheetDescription>
       </SheetHeader>
 
-      <div className="mt-4 space-y-4">
+      {/* SheetContent already supplies the column gap, and this column fills the drawer —
+          so the stat row aligns with the header and the print action lands at the
+          bottom instead of leaving a void under the tabs. */}
+      <div className="flex flex-1 flex-col gap-4 px-4 pb-4">
         <div className="grid grid-cols-4 gap-2 text-center">
-          <div className="rounded-lg border p-2">
-            <p className="text-lg font-semibold">{pct}%</p>
-            <p className="text-muted-foreground text-[11px]">overall</p>
-          </div>
-          <div className="rounded-lg border p-2">
-            <p className="text-lg font-semibold tabular-nums">{report.totals.score}</p>
-            <p className="text-muted-foreground text-[11px]">/ {report.totals.maxScore}</p>
-          </div>
-          <div className="rounded-lg border p-2">
-            <p className="text-lg font-semibold tabular-nums">{report.totals.correct}</p>
-            <p className="text-muted-foreground text-[11px]">correct</p>
-          </div>
-          <div className="rounded-lg border p-2">
-            <p className="text-lg font-semibold tabular-nums">{report.totals.unattempted}</p>
-            <p className="text-muted-foreground text-[11px]">skipped</p>
-          </div>
+          <StatCard figure={`${pct}%`} label="overall" />
+          <StatCard
+            figure={report.totals.score}
+            label={report.totals.maxScore > 0 ? `of ${report.totals.maxScore} marks` : "marks"}
+          />
+          <StatCard figure={report.totals.correct} label="correct" />
+          <StatCard figure={report.totals.unattempted} label="skipped" />
         </div>
 
         <Tabs
@@ -145,91 +140,110 @@ function ProfileBody({ studentId, activeBatchId }: { studentId: string; activeBa
           </TabsList>
         </Tabs>
 
-        {loading ? (
-          <div className="text-muted-foreground flex items-center gap-2 py-8 text-sm">
-            <Loader2 className="size-4 animate-spin" /> Loading…
-          </div>
-        ) : rowsEmpty ? (
-          <p className="text-muted-foreground py-8 text-center text-sm">
-            {tab === "missed"
-              ? "Nothing missed — they have sat every exam given to their batches."
-              : "No exams in this view yet."}
-          </p>
-        ) : tab === "missed" ? (
-          <div className="rounded-xl border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Exam</TableHead>
-                  <TableHead className="text-right">Given on</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {missed.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell>
-                      <p className="font-medium">{m.title}</p>
-                      <p className="text-muted-foreground text-xs">{m.batchName}</p>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-right text-xs">
-                      {new Date(m.startsAt).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          <>
+        {/* This region absorbs the drawer's remaining height: a student with no
+            history gets a centred empty state instead of a hole under the tabs. */}
+        <div className="flex flex-1 flex-col">
+          {loading ? (
+            <div className="text-muted-foreground flex flex-1 items-center gap-2 text-sm">
+              <Loader2 className="size-4 animate-spin" /> Loading…
+            </div>
+          ) : rowsEmpty ? (
+            <div className="flex flex-1 items-center justify-center">
+              <p className="text-muted-foreground text-sm">
+                {tab === "missed"
+                  ? "Nothing missed — they have sat every exam given to their batches."
+                  : "No exams in this view yet."}
+              </p>
+            </div>
+          ) : tab === "missed" ? (
             <div className="rounded-xl border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Exam</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Score</TableHead>
+                    <TableHead className="text-right">Given on</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {history.map((h) => (
-                    <TableRow key={h.attemptId}>
+                  {missed.map((m) => (
+                    <TableRow key={m.id}>
                       <TableCell>
-                        <p className="font-medium">{h.examTitle}</p>
-                        <p className="text-muted-foreground text-xs">
-                          {h.batchName} · {new Date(h.takenAt).toLocaleDateString()}
-                        </p>
+                        <p className="font-medium">{m.title}</p>
+                        <p className="text-muted-foreground text-xs">{m.batchName}</p>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={h.status === "submitted" ? "success" : "secondary"}>
-                          {h.status.replace("_", " ")}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {h.score}/{h.maxScore}
+                      <TableCell className="text-muted-foreground text-right text-xs">
+                        {new Date(m.startsAt).toLocaleDateString()}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-            <Pagination
-              total={report.total ?? history.length}
-              limit={report.limit ?? limit}
-              offset={report.offset ?? offset}
-              noun="exams"
-              onChange={({ limit: nextLimit, offset: nextOffset }) => {
-                setLimit(nextLimit);
-                setOffset(nextOffset);
-                setLoading(true);
-              }}
-            />
-          </>
-        )}
+          ) : (
+            <>
+              <div className="rounded-xl border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Exam</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Score</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {history.map((h) => (
+                      <TableRow key={h.attemptId}>
+                        <TableCell>
+                          <p className="font-medium">{h.examTitle}</p>
+                          <p className="text-muted-foreground text-xs">
+                            {h.batchName} · {new Date(h.takenAt).toLocaleDateString()}
+                          </p>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={h.status === "submitted" ? "success" : "secondary"}>
+                            {h.status.replace("_", " ")}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {h.score}/{h.maxScore}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <Pagination
+                total={report.total ?? history.length}
+                limit={report.limit ?? limit}
+                offset={report.offset ?? offset}
+                noun="exams"
+                onChange={({ limit: nextLimit, offset: nextOffset }) => {
+                  setLimit(nextLimit);
+                  setOffset(nextOffset);
+                  setLoading(true);
+                }}
+              />
+            </>
+          )}
+        </div>
 
         <Button variant="outline" className="w-full" onClick={() => window.print()}>
           Print report card
         </Button>
       </div>
     </>
+  );
+}
+
+/**
+ * A single numeric fact. Display face, so a row of four of these reads as a
+ * line of figures rather than four boxes of body text.
+ */
+function StatCard({ figure, label }: { figure: ReactNode; label: string }) {
+  return (
+    <div className="rounded-lg border bg-card px-2 py-2.5">
+      <p className="stat-figure text-xl leading-none font-semibold">{figure}</p>
+      <p className="text-muted-foreground mt-1.5 text-[11px] leading-tight">{label}</p>
+    </div>
   );
 }
