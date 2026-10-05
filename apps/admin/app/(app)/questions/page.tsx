@@ -299,7 +299,7 @@ export default function QuestionsPage() {
                 {selectedTopic ? selectedTopic.name : "Select a topic"}
               </p>
               <p className="text-muted-foreground text-xs">
-                {questions.length} question{questions.length === 1 ? "" : "s"}
+                {total} question{total === 1 ? "" : "s"}
               </p>
             </div>
             <div className="flex items-center gap-2">
