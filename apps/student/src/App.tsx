@@ -341,7 +341,7 @@ export default function App() {
           <Progress value={progress} className="mx-4 mb-2" />
         </header>
 
-        <main className="flex-1 space-y-4 p-4 pb-28">
+        <main className="flex-1 space-y-4 p-4 pb-[calc(7rem+env(safe-area-inset-bottom))]">
           <Card>
             <CardContent className="space-y-4 pt-5">
               <div className="flex items-center justify-between">
@@ -449,7 +449,9 @@ export default function App() {
         </main>
 
         <footer className="bg-background/95 fixed inset-x-0 bottom-0 border-t backdrop-blur">
-          <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-2 p-3">
+          {/* max() keeps normal padding on devices with no inset, and lifts the
+              buttons above the Android navigation bar in standalone mode. */}
+          <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <Button variant="outline" disabled={index === 0} onClick={() => setIndex((i) => i - 1)}>
               Back
             </Button>
