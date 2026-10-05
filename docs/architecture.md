@@ -6,7 +6,7 @@ The student device is untrusted but is also the only place the exam renders.
 The resolution:
 
 ```
-student PWA ──HTTP──► Worker (Hono) ──► per-exam Durable Object   ← authoritative
+student web app ──HTTP──► Worker (Hono) ──► per-exam Durable Object   ← authoritative
                             │                    │
                             └────► D1 ◄──────────┘   (durable rows + audit)
 ```
@@ -68,11 +68,16 @@ to R2 (`MATERIALS_BUCKET`) under a random key and the question stores `mediaKey`
 During an exam the student fetches `GET /api/media/:key` — unguessable key, so no
 student session is needed, and the same asset works for the frozen paper snapshot.
 
-## Service-worker policy (student PWA)
+## Caching policy (student app)
 
-- Cache the app shell only.
-- `runtimeCaching: []`, API paths denied from navigation fallback.
-- Rationale: a stale cached paper served after close would be a correctness bug.
+- **No service worker, no offline cache.** The student app is a plain web app.
+- Rationale: a stale cached paper served after close would be a correctness bug,
+  and nothing in the exam flow needs to work offline.
+- The browser cache is enough: Vercel serves hashed `assets/*` immutably and
+  `index.html` with revalidation.
+- Devices that installed the old PWA unregister it on load (see
+  `apps/student/src/main.tsx`) — removing the worker without that step would
+  leave the old shell cached forever.
 
 ## Deployment
 

@@ -8,7 +8,7 @@ exams taken on a phone, and report cards that survive semester changes.
 | Path              | What it is                                              | Deploy            |
 | ----------------- | ------------------------------------------------------- | ----------------- |
 | `apps/admin`      | Teacher dashboard (Next.js, App Router, Tailwind v4)   | Vercel            |
-| `apps/student`    | Student exam PWA (Vite + React, `vite-plugin-pwa`)     | Vercel            |
+| `apps/student`    | Student exam web app (Vite + React)                    | Vercel            |
 | `apps/api`        | API + Durable Objects (Hono on Cloudflare Workers)     | Cloudflare        |
 | `packages/db`     | Drizzle schema + D1 migrations                         | —                 |
 | `packages/shared` | Zod schemas, domain types, timing rules                | —                 |
@@ -40,7 +40,9 @@ Read these before changing the schema or the Worker.
    normalized roll number. Batches are time slices joined via `batch_students`.
 4. **Violations are recorded, not punished.** Exiting/tampering is logged and
    surfaced to the teacher for review. Nothing auto-bans.
-5. **Never cache exam answers.** The PWA service worker caches the app shell only.
+5. **Nothing caches exam traffic.** The student app is a plain web app — no
+   service worker, no offline cache — so every paper, answer and heartbeat goes
+   to the Worker. A stale cached paper after close would be a correctness bug.
 
 See [`docs/architecture.md`](docs/architecture.md) and
 [`docs/decisions.md`](docs/decisions.md).

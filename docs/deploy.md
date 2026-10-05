@@ -7,7 +7,7 @@ system, in the order that avoids shipping a broken auth window.
 | ------------------ | ---------------------------------------------- | ----------------- |
 | `apps/api`         | Hono Worker + Durable Objects                  | Cloudflare        |
 | `apps/admin`       | Teacher dashboard (Next.js)                    | Vercel            |
-| `apps/student`     | Student exam PWA (Vite)                        | Vercel            |
+| `apps/student`     | Student exam web app (Vite)                    | Vercel            |
 
 Local development is covered in the root `README.md`; this file is only about
 production.
@@ -117,7 +117,7 @@ Because `NEXT_PUBLIC_*` is baked in at build time, changing a URL requires a
 
 ---
 
-## 3. Deploy the student PWA (Vercel)
+## 3. Deploy the student web app (Vercel)
 
 | Setting          | Value                                                        |
 | ---------------- | ------------------------------------------------------------ |
@@ -133,17 +133,21 @@ Because `NEXT_PUBLIC_*` is baked in at build time, changing a URL requires a
 line is load-bearing: **exam join links are opened cold** — scanned from a QR
 code or tapped in a message — so the server has to serve the app shell for a
 path that has no file behind it. The rewrite is deliberately scoped to `/j/`
-rather than a catch-all so it can never swallow `sw.js` or the hashed bundles.
+rather than a catch-all so it can never swallow the hashed bundles.
 
-Service worker notes:
+Caching notes:
 
-- `vite-plugin-pwa` registers the worker and injects the manifest link; there is
-  nothing to wire up by hand.
-- The worker caches the **app shell only**. Exam and answer responses are
-  network-only by design — a stale paper after an exam closes would be a
-  correctness bug, so do not add API routes to `runtimeCaching`.
-- HTTPS comes free with Vercel; the PWA install criteria are met by the
-  192/512 PNG icons plus the maskable variant in `apps/student/public`.
+- **There is no service worker.** The student app is a plain Vite web app, so
+  nothing is precached and every paper, answer and heartbeat goes to the Worker.
+  A stale cached paper after an exam closes would be a correctness bug.
+- This used to be a PWA. `apps/student/src/main.tsx` unregisters any service
+  worker left behind on a device that installed the old version and drops its
+  caches — without that, an installed client would keep serving the old shell
+  forever, because no new worker is emitted to replace it.
+- Vercel serves the hashed `assets/*` with long-lived immutable caching and
+  `index.html` with revalidation, which is the whole caching story you need now.
+- `viewport-fit=cover` and `env(safe-area-inset-bottom)` stay: the exam footer
+  sits above the Android navigation bar in a normal browser tab too.
 
 ---
 

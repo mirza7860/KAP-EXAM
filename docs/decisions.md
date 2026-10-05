@@ -47,9 +47,17 @@ exists rather than a permanent ban.
 **In-app email/password**, implemented in the Worker (PBKDF2 + HS256 JWT
 cookie). No external identity provider.
 
-## D6 — Student PWA hosting
+## D6 - Student app hosting
 
-**Vercel** (with Cloudflare handling API, DO, DB, storage).
+**Vercel** (with Cloudflare handling API, DO, DB, storage). The student app is a
+**plain web app**, not a PWA: no service worker, no manifest, no install prompt,
+no offline cache. The exam must not be served from a cache — a stale paper after
+close is a correctness bug — and nothing about the flow needs to work offline.
+
+An earlier version was a PWA. `apps/student/src/main.tsx` unregisters any worker
+left on a device that installed it and clears its caches, because the removal
+stops emitting a replacement worker: without that step an installed client would
+serve the old shell indefinitely.
 
 ## D7 — Question types (locked)
 
@@ -79,8 +87,8 @@ over HTTP with credentials. The Worker is the only writer to D1.
 Teacher uploads an image for a question; it is stored in R2 (`MATERIALS_BUCKET`)
 under an unguessable key. The question row keeps only `mediaKey`. Students fetch
 it via `GET /api/media/:key` while taking the exam, so the image travels with the
-frozen paper snapshot and needs no student session. Short cache TTL, and the PWA
-service worker never caches API traffic.
+frozen paper snapshot and needs no student session. Short cache TTL, and the
+student app has no service worker at all, so nothing caches API traffic.
 
 ## D12 — Theme: warm, system-only
 

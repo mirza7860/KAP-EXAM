@@ -3,15 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <!-- viewport-fit=cover keeps the safe-area insets meaningful on notched
+         phones; the footer relies on env(safe-area-inset-bottom). -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fdf9f3" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#241d18" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="KAP Exam" />
-    <!-- iOS does not accept SVG here; without a PNG, Add to Home Screen uses a
-         screenshot of whatever page happened to be open. -->
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>KAP Exam</title>
   </head>
   <body>
