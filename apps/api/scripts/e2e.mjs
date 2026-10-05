@@ -85,6 +85,28 @@ let exam, joinCode;
 {
   const start = new Date(Date.now() - 60_000).toISOString();
   const end = new Date(Date.now() + 3_600_000).toISOString();
+
+  // A window that has not opened yet must read as "opens at <time>", not as
+  // "closed" - students arrive early, and that message sent them away.
+  {
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+    const far = new Date(Date.now() + 7_200_000).toISOString();
+    const early = await api("POST", "/api/exams", {
+      batchId, title: "E2E Early Exam", schedule: { startsAt: future, endsAt: far, durationMinutes: 30 },
+    });
+    check("early exam created", early.status === 201);
+    await api("POST", `/api/exams/${early.body.data.id}/compose`, {
+      sources: [{ kind: "subtopic", subtopicId: subId }],
+    });
+    const earlyPub = await api("POST", `/api/exams/${early.body.data.id}/publish`, {});
+    check("early exam published", earlyPub.status === 200);
+    const earlyJoin = await api("POST", "/api/attempts/join", {
+      joinCode: early.body.data.joinCode, rollNo: "E2E-01", deviceToken: "e2e-device",
+    });
+    check("unopened exam rejected (410)", earlyJoin.status === 410);
+    check("unopened says when it opens", typeof earlyJoin.body.error?.fields?.opensAt?.[0] === "string");
+  }
+
   const e = await api("POST", "/api/exams", {
     batchId, title: "E2E Exam", schedule: { startsAt: start, endsAt: end, durationMinutes: 30 },
   });

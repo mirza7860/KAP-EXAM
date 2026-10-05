@@ -120,8 +120,15 @@ attemptRoutes.post("/join", async (c) => {
   }
 
   const now = Date.now();
-  if (now < exam.startsAt.getTime() || now >= exam.endsAt.getTime()) {
-    throw new ApiError(apiErrorCodes.windowClosed, "This exam is closed");
+  // Early is not the same as late: a student who arrives before the window
+  // opens needs to know when to come back, not that the exam is "closed".
+  if (now < exam.startsAt.getTime()) {
+    throw new ApiError(apiErrorCodes.windowClosed, "This exam hasn't opened yet", {
+      opensAt: [exam.startsAt.toISOString()],
+    });
+  }
+  if (now >= exam.endsAt.getTime()) {
+    throw new ApiError(apiErrorCodes.windowClosed, "This exam has ended");
   }
 
   // Roster-first: resolve name from DB, reject unknown rolls.

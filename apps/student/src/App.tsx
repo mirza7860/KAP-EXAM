@@ -188,6 +188,16 @@ export default function App() {
         );
         return;
       }
+      // Arrived before the window opened: the API sends when it does, so the
+      // student gets a clock time in their own timezone instead of "closed".
+      if (err instanceof StudentApiError && err.code === "windowClosed") {
+        const opensAt = err.fields?.opensAt?.[0];
+        if (opensAt) {
+          const t = new Date(opensAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          toast.error(`This exam hasn't opened yet — it opens at ${t}`);
+          return;
+        }
+      }
       toast.error(err instanceof Error ? err.message : "Could not start");
     } finally {
       setBusy(false);
