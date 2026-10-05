@@ -94,9 +94,6 @@ export default function DashboardPage() {
                           : "bg-card border-border/80",
                       )}
                     >
-                      {exam.live && (
-                        <span className="absolute inset-y-0 left-0 w-1 bg-primary" aria-hidden />
-                      )}
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2">
                           {exam.live ? (

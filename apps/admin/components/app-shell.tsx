@@ -88,7 +88,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                         asChild
                         isActive={active}
                         tooltip={item.label}
-                        className="data-[active=true]:shadow-[inset_3px_0_0_0_var(--sidebar-primary)]"
                       >
                         <Link href={item.href}>
                           <Icon />

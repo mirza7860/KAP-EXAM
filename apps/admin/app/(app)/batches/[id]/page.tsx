@@ -101,7 +101,12 @@ export default function BatchDetailPage() {
                 <ArrowLeft className="size-4" /> All batches
               </Link>
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setRenameOpen(true)} disabled={!batch}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRenameOpen(true)}
+              disabled={!batch}
+            >
               <Pencil className="size-4" /> Rename
             </Button>
             <Button size="sm" onClick={() => setAddOpen(true)} disabled={!batch}>
@@ -127,46 +132,48 @@ export default function BatchDetailPage() {
             </Button>
           </div>
         ) : (
-          <div className="rounded-xl border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-32">Roll no</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead className="hidden sm:table-cell">Joined</TableHead>
-                  <TableHead className="w-16" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {roster.map((entry) => (
-                  <TableRow
-                    key={entry.studentId}
-                    className="cursor-pointer"
-                    onClick={() => setProfileStudentId(entry.studentId)}
-                  >
-                    <TableCell className="font-mono text-xs">{entry.rollNo}</TableCell>
-                    <TableCell className="font-medium">
-                      {entry.name}
-                      <span className="text-muted-foreground ml-2 text-xs font-normal">
-                        view report →
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground hidden text-sm sm:table-cell">
-                      {new Date(entry.joinedAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => void removeStudent(entry.studentId, entry.name)}
-                      >
-                        <UserMinus className="text-destructive size-4" />
-                      </Button>
-                    </TableCell>
+          <>
+            <div className="rounded-xl border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-32">Roll no</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="hidden sm:table-cell">Joined</TableHead>
+                    <TableHead className="w-16" />
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {roster.map((entry) => (
+                    <TableRow
+                      key={entry.studentId}
+                      className="cursor-pointer"
+                      onClick={() => setProfileStudentId(entry.studentId)}
+                    >
+                      <TableCell className="font-mono text-xs">{entry.rollNo}</TableCell>
+                      <TableCell className="font-medium">
+                        {entry.name}
+                        <span className="text-muted-foreground ml-2 text-xs font-normal">
+                          view report →
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground hidden text-sm sm:table-cell">
+                        {new Date(entry.joinedAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => void removeStudent(entry.studentId, entry.name)}
+                        >
+                          <UserMinus className="text-destructive size-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
             <Pagination
               total={rosterTotal}
               limit={limit}
@@ -177,7 +184,7 @@ export default function BatchDetailPage() {
                 setOffset(nextOffset);
               }}
             />
-          </div>
+          </>
         )}
       </PageBody>
 
@@ -331,9 +338,7 @@ function RenameBatchDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Rename batch</DialogTitle>
-          <DialogDescription>
-            Renaming never changes past exams or report cards.
-          </DialogDescription>
+          <DialogDescription>Renaming never changes past exams or report cards.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">

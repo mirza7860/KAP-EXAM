@@ -19,13 +19,7 @@ import { ArrowLeft, BarChart3, ChevronRight, Printer } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-  ApiError,
-  examApi,
-  reportApi,
-  type ExamReportData,
-  type ExamSummary,
-} from "@/lib/api";
+import { ApiError, examApi, reportApi, type ExamReportData, type ExamSummary } from "@/lib/api";
 
 const EXAM_PAGE = 20;
 /** Rosters are read row by row, so pages stay short. */
@@ -71,20 +65,17 @@ export default function ReportsPage() {
       .finally(() => setListLoading(false));
   }, [examLimit, examOffset]);
 
-  const load = useCallback(
-    async (id: string, offset: number, limit: number) => {
-      setLoading(true);
-      setError(null);
-      try {
-        setReport(await reportApi.exam(id, { offset, limit }));
-      } catch (e) {
-        setError(e instanceof ApiError ? e.message : "Could not load report");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [],
-  );
+  const load = useCallback(async (id: string, offset: number, limit: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      setReport(await reportApi.exam(id, { offset, limit }));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not load report");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (examId) void load(examId, reportOffset, reportLimit);
@@ -122,41 +113,39 @@ export default function ReportsPage() {
           }
         />
       ) : (
-        <div className="rounded-xl border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="eyebrow">Exam</TableHead>
-                <TableHead className="eyebrow hidden md:table-cell">Batch</TableHead>
-                <TableHead className="eyebrow hidden lg:table-cell">Given on</TableHead>
-                <TableHead className="eyebrow">Status</TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {exams.map((exam) => (
-                <TableRow
-                  key={exam.id}
-                  className="cursor-pointer"
-                  onClick={() => open(exam.id)}
-                >
-                  <TableCell className="font-medium">{exam.title}</TableCell>
-                  <TableCell className="text-muted-foreground hidden md:table-cell">
-                    {exam.batchName}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground hidden text-xs lg:table-cell">
-                    {new Date(exam.startsAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant(exam.status)}>{exam.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <ChevronRight className="text-muted-foreground size-4" />
-                  </TableCell>
+        <>
+          <div className="rounded-xl border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="eyebrow">Exam</TableHead>
+                  <TableHead className="eyebrow hidden md:table-cell">Batch</TableHead>
+                  <TableHead className="eyebrow hidden lg:table-cell">Given on</TableHead>
+                  <TableHead className="eyebrow">Status</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {exams.map((exam) => (
+                  <TableRow key={exam.id} className="cursor-pointer" onClick={() => open(exam.id)}>
+                    <TableCell className="font-medium">{exam.title}</TableCell>
+                    <TableCell className="text-muted-foreground hidden md:table-cell">
+                      {exam.batchName}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground hidden text-xs lg:table-cell">
+                      {new Date(exam.startsAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(exam.status)}>{exam.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <ChevronRight className="text-muted-foreground size-4" />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
           <Pagination
             total={examTotal}
             limit={examLimit}
@@ -168,7 +157,7 @@ export default function ReportsPage() {
               setListLoading(true);
             }}
           />
-        </div>
+        </>
       )}
     </>
   );
@@ -185,7 +174,10 @@ export default function ReportsPage() {
       title="Couldn't load that report"
       description={error}
       action={
-        <Button variant="outline" onClick={() => examId && void load(examId, reportOffset, reportLimit)}>
+        <Button
+          variant="outline"
+          onClick={() => examId && void load(examId, reportOffset, reportLimit)}
+        >
           Try again
         </Button>
       }
@@ -247,21 +239,21 @@ export default function ReportsPage() {
             ))}
           </TableBody>
         </Table>
-        <Pagination
-          total={rosterTotal}
-          limit={reportLimit}
-          offset={reportOffset}
-          noun="students"
-          onChange={({ limit, offset }) => {
-            setReportLimit(limit);
-            setReportOffset(offset);
-          }}
-        />
       </div>
+      <Pagination
+        total={rosterTotal}
+        limit={reportLimit}
+        offset={reportOffset}
+        noun="students"
+        onChange={({ limit, offset }) => {
+          setReportLimit(limit);
+          setReportOffset(offset);
+        }}
+      />
 
       <p className="text-muted-foreground text-xs">
-        Click a student for their unified report card across all batches. C/W/S = correct /
-        wrong / skipped.
+        Click a student for their unified report card across all batches. C/W/S = correct / wrong /
+        skipped.
       </p>
     </div>
   );

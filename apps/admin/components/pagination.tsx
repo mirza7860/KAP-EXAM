@@ -43,22 +43,22 @@ export function Pagination({
     <nav
       aria-label="Pagination"
       className={cn(
-        "flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-4",
+        // A row of its own under the list, never inside the table card — the
+        // card's edge meets the buttons' rounded corners and reads as cut flat.
+        "mt-4 flex flex-wrap items-center justify-between gap-3",
         className,
       )}
     >
       <p className="text-muted-foreground text-sm tabular-nums">
-        Showing <span className="text-foreground font-medium">{from.toLocaleString()}–{to.toLocaleString()}</span>{" "}
+        Showing{" "}
+        <span className="text-foreground font-medium">
+          {from.toLocaleString()}–{to.toLocaleString()}
+        </span>{" "}
         of {total.toLocaleString()} {noun}
       </p>
 
       <div className="flex items-center gap-1">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={page <= 1}
-          onClick={() => go(page - 1)}
-        >
+        <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => go(page - 1)}>
           <ChevronLeft className="size-3.5" /> Prev
         </Button>
 
@@ -71,8 +71,14 @@ export function Pagination({
             <Button
               key={entry}
               size="sm"
-              variant={entry === page ? "default" : "ghost"}
-              className="tabular-nums"
+              type="button"
+              variant={entry === page ? "outline" : "ghost"}
+              aria-current={entry === page ? "page" : undefined}
+              className={cn(
+                "tabular-nums",
+                entry === page &&
+                  "border-primary/35 bg-primary/10 font-medium text-primary hover:bg-primary/10 hover:text-primary",
+              )}
               onClick={() => go(entry)}
             >
               {entry}
@@ -80,12 +86,7 @@ export function Pagination({
           ),
         )}
 
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={page >= pages}
-          onClick={() => go(page + 1)}
-        >
+        <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => go(page + 1)}>
           Next <ChevronRight className="size-3.5" />
         </Button>
       </div>

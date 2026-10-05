@@ -26,7 +26,10 @@ const requestSchema = z.object({
   /** Default 10. Clamped to protect quota and review sanity. */
   count: z.number().int().min(1).max(20).default(10),
   /** Restrict the mix; default is all four types. */
-  types: z.array(z.enum(QUESTION_TYPES)).min(1).default([...QUESTION_TYPES]),
+  types: z
+    .array(z.enum(QUESTION_TYPES))
+    .min(1)
+    .default([...QUESTION_TYPES]),
   /** Free-form hint, e.g. "Class 10, board-exam difficulty". */
   level: z.string().trim().max(200).nullable().default(null),
 });
@@ -51,9 +54,12 @@ const OPTION_IDS = ["a", "b", "c", "d"];
 function systemPrompt(input: z.infer<typeof requestSchema>): string {
   const typeGuide = input.types
     .map((t) => {
-      if (t === "mcq_single") return "- mcq_single: 4 options, EXACTLY ONE correct (correctIndices has 1 entry)";
-      if (t === "mcq_multi") return "- mcq_multi: 4 options, 2 or 3 correct (correctIndices has 2-3 entries)";
-      if (t === "true_false") return "- true_false: a statement; options must be [] and correctIndices is [0] for true or [1] for false";
+      if (t === "mcq_single")
+        return "- mcq_single: 4 options, EXACTLY ONE correct (correctIndices has 1 entry)";
+      if (t === "mcq_multi")
+        return "- mcq_multi: 4 options, 2 or 3 correct (correctIndices has 2-3 entries)";
+      if (t === "true_false")
+        return "- true_false: a statement; options must be [] and correctIndices is [0] for true or [1] for false";
       return "- numeric: a problem with a single numeric answer (correctNumber set); tolerance only when the answer is measured/approximate, else 0/null";
     })
     .join("\n");
@@ -107,7 +113,9 @@ export async function POST(request: NextRequest) {
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: { code: "bad_request", message: "Describe what you want (at least 10 characters)" } },
+      {
+        error: { code: "bad_request", message: "Describe what you want (at least 10 characters)" },
+      },
       { status: 400 },
     );
   }
@@ -199,21 +207,38 @@ export async function POST(request: NextRequest) {
 
   const drafts: unknown[] = [];
   shape.data.questions.slice(0, input.count).forEach((item, i) => {
-    const options = item.options.slice(0, 4).map((text, idx) => ({
-      id: OPTION_IDS[idx]!,
-      text: text.trim().slice(0, 2000),
-    }));
-    const correctOptionIds = item.correctIndices
-      .filter((idx) => idx < options.length)
-      .map((idx) => OPTION_IDS[idx]!);
+    const isChoice = item.type === "mcq_single" || item.type === "mcq_multi";
+    const isTrueFalse = item.type === "true_false";
+
+    const options = isChoice
+      ? item.options.slice(0, 4).map((text, idx) => ({
+          id: OPTION_IDS[idx]!,
+          text: text.trim().slice(0, 2000),
+        }))
+      : [];
+
+    // true/false has no option rows — the answer is [0] for true, [1] for
+    // false. Mapping it through the option list would always yield an empty
+    // answer and get the question thrown away, which is how 10 requests
+    // came back as 8.
+    let correctOptionIds: string[] = [];
+    if (isTrueFalse) {
+      const pick = item.correctIndices[0];
+      if (pick === 0) correctOptionIds = ["true"];
+      else if (pick === 1) correctOptionIds = ["false"];
+    } else if (isChoice) {
+      correctOptionIds = item.correctIndices
+        .filter((idx) => idx < options.length)
+        .map((idx) => OPTION_IDS[idx]!);
+    }
 
     const candidate = {
       subtopicId: input.subtopicId,
       type: item.type,
       prompt: item.prompt.trim(),
       mediaKey: null,
-      options: item.type === "numeric" ? [] : options,
-      correctOptionIds: item.type === "numeric" ? [] : correctOptionIds,
+      options,
+      correctOptionIds,
       correctNumber: item.type === "numeric" ? item.correctNumber : null,
       numericTolerance: item.type === "numeric" ? (item.tolerance ?? null) : null,
       marks: item.marks,
@@ -222,7 +247,10 @@ export async function POST(request: NextRequest) {
     };
     const valid = questionInputSchema.safeParse(candidate);
     if (valid.success) drafts.push(valid.data);
-    else warnings.push(`Question ${i + 1} was dropped (${valid.error.issues[0]?.message ?? "invalid"})`);
+    else
+      warnings.push(
+        `Question ${i + 1} was dropped (${valid.error.issues[0]?.message ?? "invalid"})`,
+      );
   });
 
   if (drafts.length === 0) {

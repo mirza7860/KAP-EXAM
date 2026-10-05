@@ -56,13 +56,7 @@ export function StudentProfile({
   );
 }
 
-function ProfileBody({
-  studentId,
-  activeBatchId,
-}: {
-  studentId: string;
-  activeBatchId?: string;
-}) {
+function ProfileBody({ studentId, activeBatchId }: { studentId: string; activeBatchId?: string }) {
   const [report, setReport] = useState<StudentReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<string>(activeBatchId ?? "all");
@@ -186,36 +180,38 @@ function ProfileBody({
             </Table>
           </div>
         ) : (
-          <div className="rounded-xl border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Exam</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Score</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {history.map((h) => (
-                  <TableRow key={h.attemptId}>
-                    <TableCell>
-                      <p className="font-medium">{h.examTitle}</p>
-                      <p className="text-muted-foreground text-xs">
-                        {h.batchName} · {new Date(h.takenAt).toLocaleDateString()}
-                      </p>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={h.status === "submitted" ? "success" : "secondary"}>
-                        {h.status.replace("_", " ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {h.score}/{h.maxScore}
-                    </TableCell>
+          <>
+            <div className="rounded-xl border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Exam</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Score</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {history.map((h) => (
+                    <TableRow key={h.attemptId}>
+                      <TableCell>
+                        <p className="font-medium">{h.examTitle}</p>
+                        <p className="text-muted-foreground text-xs">
+                          {h.batchName} · {new Date(h.takenAt).toLocaleDateString()}
+                        </p>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={h.status === "submitted" ? "success" : "secondary"}>
+                          {h.status.replace("_", " ")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {h.score}/{h.maxScore}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
             <Pagination
               total={report.total ?? history.length}
               limit={report.limit ?? limit}
@@ -227,7 +223,7 @@ function ProfileBody({
                 setLoading(true);
               }}
             />
-          </div>
+          </>
         )}
 
         <Button variant="outline" className="w-full" onClick={() => window.print()}>

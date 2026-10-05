@@ -36,25 +36,22 @@ export default function ExamsPage() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(
-    async (nextOffset: number, nextLimit: number) => {
-      setLoading(true);
-      try {
-        const [examPage, batchList] = await Promise.all([
-          examApi.list({ limit: nextLimit, offset: nextOffset }),
-          batchApi.list(),
-        ]);
-        setExams(examPage.items);
-        setTotal(examPage.total);
-        setBatchCount(batchList.length);
-      } catch (error) {
-        toast.error(error instanceof ApiError ? error.message : "Could not load exams");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [],
-  );
+  const load = useCallback(async (nextOffset: number, nextLimit: number) => {
+    setLoading(true);
+    try {
+      const [examPage, batchList] = await Promise.all([
+        examApi.list({ limit: nextLimit, offset: nextOffset }),
+        batchApi.list(),
+      ]);
+      setExams(examPage.items);
+      setTotal(examPage.total);
+      setBatchCount(batchList.length);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Could not load exams");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     void load(offset, limit);
@@ -101,42 +98,46 @@ export default function ExamsPage() {
             }
           />
         ) : (
-          <div className="rounded-xl border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="eyebrow">Exam</TableHead>
-                  <TableHead className="eyebrow hidden md:table-cell">Batch</TableHead>
-                  <TableHead className="eyebrow">Status</TableHead>
-                  <TableHead className="eyebrow hidden lg:table-cell">Window</TableHead>
-                  <TableHead className="eyebrow w-16 text-right">Q</TableHead>
-                  <TableHead className="w-20" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {exams.map((exam) => (
-                  <TableRow key={exam.id}>
-                    <TableCell className="font-medium">{exam.title}</TableCell>
-                    <TableCell className="text-muted-foreground hidden md:table-cell">
-                      {exam.batchName}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={statusVariant(exam.status)}>{exam.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground hidden text-xs lg:table-cell">
-                      {new Date(exam.startsAt).toLocaleString()} →{" "}
-                      {new Date(exam.endsAt).toLocaleTimeString()}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{exam.questionCount}</TableCell>
-                    <TableCell>
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href={`/exams/${exam.id}`}>Open</Link>
-                      </Button>
-                    </TableCell>
+          <>
+            <div className="rounded-xl border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="eyebrow">Exam</TableHead>
+                    <TableHead className="eyebrow hidden md:table-cell">Batch</TableHead>
+                    <TableHead className="eyebrow">Status</TableHead>
+                    <TableHead className="eyebrow hidden lg:table-cell">Window</TableHead>
+                    <TableHead className="eyebrow w-16 text-right">Q</TableHead>
+                    <TableHead className="w-20" />
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {exams.map((exam) => (
+                    <TableRow key={exam.id}>
+                      <TableCell className="font-medium">{exam.title}</TableCell>
+                      <TableCell className="text-muted-foreground hidden md:table-cell">
+                        {exam.batchName}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={statusVariant(exam.status)}>{exam.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground hidden text-xs lg:table-cell">
+                        {new Date(exam.startsAt).toLocaleString()} →{" "}
+                        {new Date(exam.endsAt).toLocaleTimeString()}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {exam.questionCount}
+                      </TableCell>
+                      <TableCell>
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href={`/exams/${exam.id}`}>Open</Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
             <Pagination
               total={total}
               limit={limit}
@@ -147,7 +148,7 @@ export default function ExamsPage() {
                 setOffset(nextOffset);
               }}
             />
-          </div>
+          </>
         )}
       </PageBody>
     </>
