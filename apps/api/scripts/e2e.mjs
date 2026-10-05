@@ -145,6 +145,25 @@ let attemptId;
       check("answer save returns no verdict", !("isCorrect" in (a.body?.data ?? {})));
     }
   }
+  // Re-answering the same question must not inflate the teacher's "answered"
+  // column - the numeric box re-sends on every keystroke, so counting events
+  // showed 11 for a 10-question paper.
+  {
+    const first = paper[0];
+    // Re-send the answer it already has, so the paper still scores the same.
+    const repeat =
+      first.type === "numeric"
+        ? { attemptId, questionId: first.id, selectedOptionIds: [], numericValue: 42 }
+        : { attemptId, questionId: first.id, selectedOptionIds: ["b"], numericValue: null };
+    for (let i = 0; i < 3; i += 1) await api("POST", "/api/attempts/answer", repeat);
+    const live = await api("GET", `/api/exams/${exam.id}/live`);
+    const me = live.body.data.participants.find((p) => p.rollNo === "E2E-01");
+    check(
+      "answered counts questions, not answer events",
+      me?.answeredCount === paper.length,
+      `got ${me?.answeredCount}, expected ${paper.length}`,
+    );
+  }
   const sub = await api("POST", "/api/attempts/submit", { attemptId });
   check("submit returns no score", sub.body.data.ok === true && !("score" in sub.body.data));
   const rejoin = await api("POST", "/api/attempts/join", { joinCode, rollNo: "E2E-01", deviceToken: "e2e-device" });

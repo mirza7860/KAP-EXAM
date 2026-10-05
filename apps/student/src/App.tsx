@@ -366,6 +366,16 @@ export default function App() {
                     step="any"
                     placeholder="Type the number"
                     value={numericDraft}
+                    enterKeyHint={index < questions.length - 1 ? "next" : "done"}
+                    onKeyDown={(e) => {
+                      // The keyboard's Go/Next key should move on, the way it
+                      // does everywhere else on a phone - otherwise the student
+                      // has to dismiss the keyboard and hunt for Next.
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      if (index < questions.length - 1) setIndex((i) => i + 1);
+                      else setConfirmSubmit(true);
+                    }}
                     onChange={(e) => {
                       setNumericDraft(e.target.value);
                       const v = e.target.value.trim() === "" ? null : Number(e.target.value);

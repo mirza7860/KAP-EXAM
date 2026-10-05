@@ -254,7 +254,13 @@ export interface ExamDetail extends ExamSummary {
 }
 
 export interface ExamLiveState {
-  config?: { examId: string; endsAt: number; durationMinutes: number } | null;
+  config?: {
+    examId: string;
+    endsAt: number;
+    durationMinutes: number;
+    /** Seconds without a heartbeat before a student counts as gone. */
+    heartbeatGraceSeconds?: number;
+  } | null;
   serverNow: number;
   participants: {
     attemptId: string;

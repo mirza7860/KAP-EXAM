@@ -109,6 +109,13 @@ export default function ExamDetailPage() {
   // has to be cleared from an effect.
   const liveState = exam?.status === "published" ? live : null;
 
+  // Closing the tab does not end an attempt - the DO keeps it, and that is the
+  // anti-cheat model. But the student stops heartbeating, so past the grace
+  // window they should read as gone rather than "in progress" forever.
+  const graceMs = (liveState?.config?.heartbeatGraceSeconds ?? 45) * 1000;
+  const hasLeft = (p: { status: string; lastSeenAt: number }) =>
+    p.status === "in_progress" && !!liveState && liveState.serverNow - p.lastSeenAt > graceMs;
+
   async function onConfirm() {
     if (!confirm) return;
     // ConfirmDialog owns the spinner: it awaits this and disables itself, so
@@ -250,7 +257,7 @@ export default function ExamDetailPage() {
                     <Radio className="size-4" /> Live
                   </CardTitle>
                   <Badge variant="secondary">
-                    {liveState?.participants.filter((p) => p.status === "in_progress").length ?? 0} in progress
+                    {liveState?.participants.filter((p) => p.status === "in_progress" && !hasLeft(p)).length ?? 0} in progress
                   </Badge>
                 </CardHeader>
                 <CardContent>
@@ -274,8 +281,16 @@ export default function ExamDetailPage() {
                             <TableCell className="font-mono text-xs">{p.rollNo}</TableCell>
                             <TableCell>{p.name}</TableCell>
                             <TableCell>
-                              <Badge variant={p.status === "in_progress" ? "secondary" : "success"}>
-                                {p.status.replace("_", " ")}
+                              <Badge
+                                variant={
+                                  p.status === "in_progress"
+                                    ? hasLeft(p)
+                                      ? "outline"
+                                      : "secondary"
+                                    : "success"
+                                }
+                              >
+                                {hasLeft(p) ? "left" : p.status.replace("_", " ")}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
@@ -361,8 +376,15 @@ export default function ExamDetailPage() {
                   Students open the link and enter just their roll number — names come from the roster.
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-3">
-                <div className="bg-muted flex items-center justify-between gap-2 rounded-md border p-3">
+              {/* min-w-0 belongs on the grid item, not the row inside it: this
+                  is the element that sizes to the nowrap URL's max-content and
+                  pushes the dialog wider than its own max-w. */}
+              <div className="min-w-0 space-y-3">
+                {/* min-w-0: without it this row's min-width resolves to the
+                    nowrap URL's full width, so a long student URL (the real
+                    production one is 49 chars) pushes the row out past the
+                    dialog edge instead of letting the code truncate. */}
+                <div className="bg-muted flex min-w-0 items-center justify-between gap-2 rounded-md border p-3">
                   <code className="truncate text-sm">{exam && joinUrl(exam.joinCode)}</code>
                   <Button size="sm" variant="ghost" onClick={() => void copyLink()}>
                     <Copy className="size-4" />

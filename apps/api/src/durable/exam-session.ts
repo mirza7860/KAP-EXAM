@@ -30,6 +30,14 @@ interface Participant {
   deadlineAt: number;
   lastSeenAt: number;
   answeredCount: number;
+  /**
+   * Distinct question ids the student has answered. The count above is derived
+   * from this: an answer is re-sent on every edit (the numeric box saves on
+   * each keystroke), so counting events rather than questions reported 11 for
+   * a 10-question paper. Optional because attempts that started before this
+   * was tracked have no set.
+   */
+  answeredQuestionIds?: string[];
   status: "in_progress" | "submitted" | "timed_out";
 }
 
@@ -143,6 +151,7 @@ export class ExamSession implements DurableObject {
       deadlineAt,
       lastSeenAt: now,
       answeredCount: 0,
+      answeredQuestionIds: [],
       status: "in_progress",
     };
     participants.set(participant.attemptId, participant);
@@ -162,7 +171,10 @@ export class ExamSession implements DurableObject {
     if (!participant) return json({ error: { code: "not_found", message: "Unknown attempt" } }, 404);
 
     participant.lastSeenAt = now;
-    participant.answeredCount = body.answeredCount;
+    // The server owns the count via answeredQuestionIds. Only fall back to the
+    // client's number for an attempt that predates that tracking - otherwise
+    // the two writers disagree and the count can jump backwards.
+    if (!participant.answeredQuestionIds) participant.answeredCount = body.answeredCount;
     await this.saveParticipants(participants);
 
     // Clock skew is a signal, not an offence: record it for the teacher.
@@ -201,7 +213,14 @@ export class ExamSession implements DurableObject {
 
     // TODO: persist the answer to D1 `answers` and grade auto-gradable types.
     participant.lastSeenAt = now;
-    participant.answeredCount += 1;
+    // Count questions, not answer events: editing an answer (or typing a
+    // multi-digit number) re-sends it, and a cleared answer stops counting.
+    const answered = new Set(participant.answeredQuestionIds ?? []);
+    const blank = body.selectedOptionIds.length === 0 && body.numericValue === null;
+    if (blank) answered.delete(body.questionId);
+    else answered.add(body.questionId);
+    participant.answeredQuestionIds = [...answered];
+    participant.answeredCount = answered.size;
     await this.saveParticipants(participants);
     return json({ ok: true, serverNow: now });
   }
