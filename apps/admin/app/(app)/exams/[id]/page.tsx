@@ -142,6 +142,17 @@ export default function ExamDetailPage() {
     }
   }
 
+  /** Clear an exit-limit lock. The next poll picks up the new roster. */
+  async function onUnlock(attemptId: string, name: string) {
+    try {
+      await examApi.unlock(examId, attemptId);
+      setLive(await examApi.live(examId));
+      toast.success(`${name} can carry on - the lock is cleared`);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Could not unlock");
+    }
+  }
+
   async function savePaper() {
     if (!exam || sources.length === 0) return;
     setSavingPaper(true);
@@ -273,6 +284,7 @@ export default function ExamDetailPage() {
                           <TableHead>Name</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Answered</TableHead>
+                          <TableHead />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -283,18 +295,35 @@ export default function ExamDetailPage() {
                             <TableCell>
                               <Badge
                                 variant={
-                                  p.status === "in_progress"
-                                    ? hasLeft(p)
-                                      ? "outline"
-                                      : "secondary"
-                                    : "success"
+                                  p.status === "locked"
+                                    ? "destructive"
+                                    : p.status === "in_progress"
+                                      ? hasLeft(p)
+                                        ? "outline"
+                                        : "secondary"
+                                      : "success"
                                 }
                               >
-                                {hasLeft(p) ? "left" : p.status.replace("_", " ")}
+                                {p.status === "locked"
+                                  ? "locked"
+                                  : hasLeft(p)
+                                    ? "left"
+                                    : p.status.replace("_", " ")}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
                               {p.answeredCount}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {p.status === "locked" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => void onUnlock(p.attemptId, p.name)}
+                                >
+                                  Unlock
+                                </Button>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}

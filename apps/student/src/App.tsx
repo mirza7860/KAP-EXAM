@@ -1,4 +1,4 @@
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Logo, MathText, Progress, Separator, Toaster, toast } from "@kap-exam/ui";
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Logo, MathText, Progress, Separator, Toaster, toast } from "@kap-exam/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { codeFromLocation, mediaUrl, studentApi, StudentApiError, type JoinData, type ReviewItem } from "./lib/api";
 
@@ -33,6 +33,7 @@ export default function App() {
   const [examTitle, setExamTitle] = useState<string | null>(null);
   const [alreadyFinished, setAlreadyFinished] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [lockedOut, setLockedOut] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const deadline = join?.participant.deadlineAt ?? 0;
@@ -85,7 +86,14 @@ export default function App() {
     if (phase !== "exam" || !join) return;
     const answered = Object.keys(answers).length;
     const beat = () => {
-      studentApi.heartbeat(join.attemptId, answered).catch(() => undefined);
+      studentApi
+        .heartbeat(join.attemptId, answered)
+        // The teacher can lock the attempt while the student is away; the next
+        // beat is how they find out rather than discovering it on submit.
+        .then((r) => {
+          if (r.status === "locked") setLockedOut(true);
+        })
+        .catch(() => undefined);
     };
     beat();
     const t = setInterval(beat, 15000);
@@ -190,6 +198,10 @@ export default function App() {
       }
       // Arrived before the window opened: the API sends when it does, so the
       // student gets a clock time in their own timezone instead of "closed".
+      if (err instanceof StudentApiError && err.code === "locked_out") {
+        setLockedOut(true);
+        return;
+      }
       if (err instanceof StudentApiError && err.code === "windowClosed") {
         const opensAt = err.fields?.opensAt?.[0];
         if (opensAt) {
@@ -326,6 +338,45 @@ export default function App() {
   }
 
   if (phase === "exam" && join && current) {
+    if (lockedOut) {
+      return (
+        <main className="mx-auto flex min-h-full w-full max-w-2xl flex-col items-center justify-center gap-4 p-6 text-center">
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle>Exam locked</CardTitle>
+              <CardDescription>
+                You left the exam too many times, so it has been locked. Ask your teacher to unlock
+                you, then try again.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                className="w-full"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  studentApi
+                    .join(code.trim().toUpperCase(), roll.trim())
+                    .then((data) => {
+                      setJoin(data);
+                      setAnswers(data.answers ?? {});
+                      setClockOffset(data.serverNow - Date.now());
+                      setLockedOut(false);
+                    })
+                    .catch((err: unknown) => {
+                      toast.error(err instanceof Error ? err.message : "Still locked");
+                    })
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Try again
+              </Button>
+            </CardContent>
+          </Card>
+          <Toaster />
+        </main>
+      );
+    }
     return (
       <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col">
         <header className="bg-background/90 sticky top-0 z-10 border-b backdrop-blur">

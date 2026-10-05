@@ -9,6 +9,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   [apiErrorCodes.conflict]: 409,
   [apiErrorCodes.windowClosed]: 410,
   [apiErrorCodes.attemptLocked]: 423,
+  [apiErrorCodes.lockedOut]: 423,
   [apiErrorCodes.alreadySubmitted]: 409,
   [apiErrorCodes.rateLimited]: 429,
   [apiErrorCodes.internal]: 500,

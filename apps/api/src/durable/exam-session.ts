@@ -38,8 +38,17 @@ interface Participant {
    * was tracked have no set.
    */
   answeredQuestionIds?: string[];
-  status: "in_progress" | "submitted" | "timed_out";
+  status: "in_progress" | "submitted" | "timed_out" | "locked";
+  /** Times the student left the app. Locked once it exceeds EXIT_LIMIT. */
+  exitCount?: number;
 }
+
+/**
+ * How many times a student may leave the exam before it locks. Locking is
+ * recoverable - the teacher unlocks from the live roster - because a phone
+ * call can background the app and D4's point still stands.
+ */
+const EXIT_LIMIT = 2;
 
 interface ViolationRecord {
   attemptId: string;
@@ -98,6 +107,8 @@ export class ExamSession implements DurableObject {
         return this.handleSubmit(request);
       case "POST /violation":
         return this.handleViolation(request);
+      case "POST /unlock":
+        return this.handleUnlock(request);
       case "POST /close":
         return this.handleClose();
       case "GET /state":
@@ -138,6 +149,13 @@ export class ExamSession implements DurableObject {
     const participants = await this.participants();
     const existing = participants.get(body.attemptId);
     if (existing) {
+      // Locked out for leaving the app too often - the teacher has to unlock.
+      if (existing.status === "locked") {
+        return json(
+          { error: { code: "locked_out", message: "You left the exam too many times" } },
+          423,
+        );
+      }
       existing.lastSeenAt = now;
       await this.saveParticipants(participants);
       return json({ participant: existing, serverNow: now });
@@ -240,8 +258,46 @@ export class ExamSession implements DurableObject {
 
   private async handleViolation(request: Request): Promise<Response> {
     const body = (await request.json()) as ViolationRecord;
-    await this.recordViolation({ ...body, receivedAt: Date.now() });
+    const now = Date.now();
+    await this.recordViolation({ ...body, receivedAt: now });
+
+    // Leaving the app is the one signal we act on. `window_blur` is excluded
+    // on purpose: the keyboard and the notification shade fire it, and D4's
+    // objection to auto-banning on noisy signals still holds for those.
+    if (body.type === "visibility_hidden") {
+      const participants = await this.participants();
+      const participant = participants.get(body.attemptId);
+      if (participant && participant.status === "in_progress") {
+        participant.exitCount = (participant.exitCount ?? 0) + 1;
+        if (participant.exitCount > EXIT_LIMIT) {
+          participant.status = "locked";
+          await this.recordViolation({
+            attemptId: body.attemptId,
+            type: "locked_out",
+            occurredAt: now,
+            receivedAt: now,
+            detail: `exits=${participant.exitCount}`,
+          });
+        }
+        await this.saveParticipants(participants);
+      }
+    }
     return json({ ok: true });
+  }
+
+  /** Teacher lets a locked student back in. Resets the count so it can lock again. */
+  private async handleUnlock(request: Request): Promise<Response> {
+    const body = (await request.json()) as { attemptId: string };
+    const participants = await this.participants();
+    const participant = participants.get(body.attemptId);
+    if (!participant) return json({ error: { code: "not_found", message: "Unknown attempt" } }, 404);
+    if (participant.status === "locked") {
+      participant.status = "in_progress";
+      participant.exitCount = 0;
+      participant.lastSeenAt = Date.now();
+      await this.saveParticipants(participants);
+    }
+    return json({ participant });
   }
 
   private async recordViolation(record: ViolationRecord): Promise<void> {

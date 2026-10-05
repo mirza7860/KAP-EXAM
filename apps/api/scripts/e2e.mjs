@@ -164,6 +164,57 @@ let attemptId;
       `got ${me?.answeredCount}, expected ${paper.length}`,
     );
   }
+  // Exit limit: leaving the app three times locks the attempt and only the
+  // teacher can clear it. window_blur must NOT count - the keyboard and the
+  // notification shade fire it.
+  {
+    const leave = () =>
+      api("POST", "/api/attempts/violation", {
+        attemptId,
+        type: "visibility_hidden",
+        occurredAt: Date.now(),
+      });
+    await api("POST", "/api/attempts/violation", {
+      attemptId,
+      type: "window_blur",
+      occurredAt: Date.now(),
+    });
+    await leave();
+    await leave();
+    let state = await api("GET", `/api/exams/${exam.id}/live`);
+    let me = state.body.data.participants.find((p) => p.rollNo === "E2E-01");
+    check("two exits (plus a blur) do not lock", me?.status === "in_progress", `status=${me?.status}`);
+
+    await leave();
+    state = await api("GET", `/api/exams/${exam.id}/live`);
+    me = state.body.data.participants.find((p) => p.rollNo === "E2E-01");
+    check("third exit locks the attempt", me?.status === "locked", `status=${me?.status}`);
+
+    const blocked = await api("POST", "/api/attempts/join", {
+      joinCode,
+      rollNo: "E2E-01",
+      deviceToken: "e2e-device",
+    });
+    check(
+      "locked student cannot rejoin",
+      blocked.status === 423 && blocked.body.error?.code === "locked_out",
+      `${blocked.status} ${blocked.body.error?.code}`,
+    );
+
+    const unlocked = await api(
+      "POST",
+      `/api/exams/${exam.id}/participants/${attemptId}/unlock`,
+      {},
+    );
+    check("teacher can unlock", unlocked.status === 200, `status=${unlocked.status}`);
+    const rejoinAfterUnlock = await api("POST", "/api/attempts/join", {
+      joinCode,
+      rollNo: "E2E-01",
+      deviceToken: "e2e-device",
+    });
+    check("unlocked student can carry on", rejoinAfterUnlock.status === 200);
+  }
+
   const sub = await api("POST", "/api/attempts/submit", { attemptId });
   check("submit returns no score", sub.body.data.ok === true && !("score" in sub.body.data));
   const rejoin = await api("POST", "/api/attempts/join", { joinCode, rollNo: "E2E-01", deviceToken: "e2e-device" });

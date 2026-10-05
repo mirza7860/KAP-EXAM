@@ -270,6 +270,8 @@ export interface ExamLiveState {
     answeredCount: number;
     deadlineAt: number;
     lastSeenAt: number;
+    /** Times they left the app. Over the limit, status is "locked". */
+    exitCount?: number;
   }[];
   violations: { attemptId: string; type: string; receivedAt: number }[];
 }
@@ -337,6 +339,9 @@ export const examApi = {
   /** Release the answer key. Irreversible. */
   reveal: (id: string) => api.post<ExamDetail>(`/api/exams/${id}/reveal`, {}),
   live: (id: string) => api.get<ExamLiveState>(`/api/exams/${id}/live`),
+  /** Clear an exit-limit lock so the student can carry on. */
+  unlock: (id: string, attemptId: string) =>
+    api.post<{ ok: boolean }>(`/api/exams/${id}/participants/${attemptId}/unlock`, {}),
   leaderboard: (id: string) => api.get<Leaderboard>(`/api/exams/${id}/leaderboard`),
 };
 

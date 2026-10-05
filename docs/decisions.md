@@ -21,11 +21,26 @@ finish by then, so late joiners get less time. Per-attempt cap is
 Copying a batch for a new semester keeps the same students, so a report card can
 span semesters. Batches are time slices joined through `batch_students`.
 
-## D4 — Anti-cheat
+## D4 - Anti-cheat
 
-**Heartbeat + event log + teacher review.** No auto-ban. Web violation signals
-are too noisy (incoming calls, notifications) to punish automatically. The
-teacher gets a timeline and decides.
+**Heartbeat + event log + teacher review, plus one recoverable automatic
+lock.** Web violation signals are too noisy (incoming calls, notifications) to
+punish automatically, so the default is still: record everything, the teacher
+gets a timeline and decides.
+
+The one exception is leaving the app. `visibility_hidden` is counted per
+attempt and the 3rd exit locks it (`locked`), which stops the student joining
+again with `locked_out`. Two things keep this from being the auto-ban D4
+originally rejected:
+
+- `window_blur` is deliberately **not** counted. The keyboard and the
+  notification shade fire it, and those are not the student leaving.
+- The lock is **recoverable**: the live roster shows `locked` and the teacher
+  unlocks it from there (`POST /api/exams/:id/participants/:attemptId/unlock`),
+  which also resets the count.
+
+A phone call can still background the app, which is exactly why the unlock
+exists rather than a permanent ban.
 
 ## D5 — Teacher auth
 

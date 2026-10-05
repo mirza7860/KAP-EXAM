@@ -451,3 +451,16 @@ examRoutes.get("/:id/live", async (c) => {
   const state = (await response.json()) as unknown;
   return c.json({ data: state });
 });
+
+/**
+ * Let a student back in after the exit limit locked them out. The lock is a
+ * deterrent, not a verdict - a phone call can background the app, so the
+ * teacher has to be able to undo it.
+ */
+examRoutes.post("/:id/participants/:attemptId/unlock", async (c) => {
+  const result = await callExamSession(c.env, c.req.param("id"), "/unlock", {
+    attemptId: c.req.param("attemptId"),
+  });
+  if (result.status >= 400) return c.json(result.data, result.status as 400);
+  return c.json({ data: { ok: true } });
+});

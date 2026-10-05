@@ -24,6 +24,7 @@ export const apiErrorCodes = {
   conflict: "conflict",
   windowClosed: "window_closed",
   attemptLocked: "attempt_locked",
+  lockedOut: "locked_out",
   alreadySubmitted: "already_submitted",
   rateLimited: "rate_limited",
   internal: "internal",
