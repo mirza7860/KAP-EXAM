@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ApiError, questionApi, topicApi, type PaperSourceInput } from "@/lib/api";
 import type { Question, Topic } from "@kap-exam/shared";
+import { MathText } from "@kap-exam/ui";
 
 export type SourceDraft = (
   | PaperSourceInput
@@ -58,6 +59,7 @@ export function PaperBuilder({
   // manual picking
   const [manualSubtopic, setManualSubtopic] = useState("");
   const [manualQuestions, setManualQuestions] = useState<Question[]>([]);
+  const [manualTotal, setManualTotal] = useState(0);
   const [manualLoading, setManualLoading] = useState(false);
   const [manualSearch, setManualSearch] = useState("");
   const [manualSelected, setManualSelected] = useState<Set<string>>(new Set());
@@ -79,8 +81,11 @@ export function PaperBuilder({
     if (mode !== "manual" || !manualSubtopic) return;
     setManualLoading(true);
     questionApi
-      .list({ subtopicId: manualSubtopic, search: manualSearch || undefined })
-      .then(setManualQuestions)
+      .list({ subtopicId: manualSubtopic, search: manualSearch || undefined, limit: 100 })
+      .then((page) => {
+        setManualQuestions(page.items);
+        setManualTotal(page.total);
+      })
       .catch(() => toast.error("Could not load questions"))
       .finally(() => setManualLoading(false));
   }, [mode, manualSubtopic, manualSearch]);
@@ -259,7 +264,9 @@ export function PaperBuilder({
                       }
                     />
                     <div className="min-w-0">
-                      <p className="line-clamp-2 text-sm">{question.prompt}</p>
+                      <p className="line-clamp-2 text-sm">
+                        <MathText>{question.prompt}</MathText>
+                      </p>
                       <p className="text-muted-foreground text-xs">
                         {QUESTION_TYPE_LABELS[question.type]} · {question.marks}m
                       </p>
@@ -269,6 +276,11 @@ export function PaperBuilder({
               </ul>
             )}
           </div>
+          {!manualLoading && manualTotal > manualQuestions.length && (
+            <p className="text-muted-foreground text-xs">
+              Showing {manualQuestions.length} of {manualTotal} — search to narrow it down.
+            </p>
+          )}
           <Button type="button" onClick={addManual} disabled={manualSelected.size === 0}>
             <Plus className="size-4" /> Add {manualSelected.size || ""} selected
           </Button>

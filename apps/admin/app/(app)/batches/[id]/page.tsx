@@ -21,48 +21,66 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageBody, PageHeader } from "@/components/page-header";
+import { Pagination } from "@/components/pagination";
 import { StudentProfile } from "@/components/student-profile";
 import { ArrowLeft, Loader2, Pencil, Plus, UserMinus } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { ApiError, batchApi, type BatchDetail } from "@/lib/api";
+import { ApiError, batchApi, type BatchDetail, type RosterEntry } from "@/lib/api";
+
+const PAGE_SIZE = 15;
 
 export default function BatchDetailPage() {
   const params = useParams<{ id: string }>();
   const batchId = params.id;
 
   const [batch, setBatch] = useState<BatchDetail | null>(null);
+  const [roster, setRoster] = useState<RosterEntry[]>([]);
+  const [rosterTotal, setRosterTotal] = useState(0);
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [profileStudentId, setProfileStudentId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setBatch(await batchApi.get(batchId));
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Could not load the batch");
-    } finally {
-      setLoading(false);
-    }
-  }, [batchId]);
+  const load = useCallback(
+    async (pageOffset: number, pageLimit: number) => {
+      setLoading(true);
+      try {
+        const [detail, rosterPage] = await Promise.all([
+          batchApi.get(batchId),
+          batchApi.students(batchId, { limit: pageLimit, offset: pageOffset }),
+        ]);
+        setBatch(detail);
+        setRoster(rosterPage.items);
+        setRosterTotal(rosterPage.total);
+      } catch (error) {
+        toast.error(error instanceof ApiError ? error.message : "Could not load the batch");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [batchId],
+  );
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load(offset, limit);
+  }, [load, offset, limit]);
 
   async function removeStudent(studentId: string, name: string) {
     if (!batch) return;
     try {
       await batchApi.removeStudent(batch.id, studentId);
-      setBatch({
-        ...batch,
-        roster: batch.roster.filter((entry) => entry.studentId !== studentId),
-        studentCount: Math.max(0, batch.studentCount - 1),
-      });
+      setRoster((current) => current.filter((entry) => entry.studentId !== studentId));
+      setRosterTotal((current) => Math.max(0, current - 1));
+      setBatch((current) =>
+        current ? { ...current, studentCount: Math.max(0, current.studentCount - 1) } : current,
+      );
+      // Deleting the last row on a page steps back rather than showing a blank one.
+      if (roster.length <= 1 && offset > 0) setOffset(Math.max(0, offset - limit));
       toast.success(`Removed ${name} from the batch`);
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Could not remove the student");
@@ -99,7 +117,7 @@ export default function BatchDetailPage() {
           </div>
         ) : !batch ? (
           <p className="text-muted-foreground text-sm">Batch not found.</p>
-        ) : batch.roster.length === 0 ? (
+        ) : rosterTotal === 0 ? (
           <div className="border-border flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-16 text-center">
             <p className="text-muted-foreground text-sm">
               No students yet. Add them, or copy a previous batch to bring the roster across.
@@ -120,7 +138,7 @@ export default function BatchDetailPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {batch.roster.map((entry) => (
+                {roster.map((entry) => (
                   <TableRow
                     key={entry.studentId}
                     className="cursor-pointer"
@@ -149,6 +167,16 @@ export default function BatchDetailPage() {
                 ))}
               </TableBody>
             </Table>
+            <Pagination
+              total={rosterTotal}
+              limit={limit}
+              offset={offset}
+              noun="students"
+              onChange={({ limit: nextLimit, offset: nextOffset }) => {
+                setLimit(nextLimit);
+                setOffset(nextOffset);
+              }}
+            />
           </div>
         )}
       </PageBody>
@@ -159,7 +187,7 @@ export default function BatchDetailPage() {
             open={addOpen}
             onOpenChange={setAddOpen}
             batchId={batch.id}
-            onAdded={() => void load()}
+            onAdded={() => void load(offset, limit)}
           />
           <RenameBatchDialog
             open={renameOpen}

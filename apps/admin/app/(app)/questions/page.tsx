@@ -16,15 +16,17 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AiGenerateDialog } from "@/components/ai-generate-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { NameDialog } from "@/components/name-dialog";
+import { Pagination } from "@/components/pagination";
 import { QuestionEditor } from "@/components/question-editor";
 import { PageBody, PageHeader } from "@/components/page-header";
 import { QUESTION_TYPE_LABELS } from "@/lib/question-form";
 import { cn } from "@/lib/utils";
 import { ChevronRight, ClipboardList, Loader2, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiError, questionApi, topicApi } from "@/lib/api";
+import { MathText } from "@kap-exam/ui";
 
 type NameDialogState =
   | { mode: "root" }
@@ -38,8 +40,13 @@ export default function QuestionsPage() {
   const [loadingTopics, setLoadingTopics] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [total, setTotal] = useState(0);
+  const [limit, setLimit] = useState(25);
+  const [offset, setOffset] = useState(0);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [search, setSearch] = useState("");
+  /** The committed search term — debounced so typing does not hammer D1. */
+  const [term, setTerm] = useState("");
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Question | undefined>(undefined);
@@ -75,24 +82,75 @@ export default function QuestionsPage() {
     void loadTopics();
   }, [loadTopics]);
 
-  const loadQuestions = useCallback(async (subtopicId: string, term: string) => {
-    setLoadingQuestions(true);
-    try {
-      setQuestions(await questionApi.list({ subtopicId, search: term || undefined }));
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Could not load questions");
-    } finally {
-      setLoadingQuestions(false);
-    }
-  }, []);
+  useEffect(() => {
+    const handle = setTimeout(() => setTerm(search), 250);
+    return () => clearTimeout(handle);
+  }, [search]);
+
+  // A new topic or a new search starts back at the first page.
+  useEffect(() => {
+    setOffset(0);
+  }, [selectedId, term]);
+
+  /** Monotonic id so a slower, older page never overwrites a newer one. */
+  const requestId = useRef(0);
+
+  const loadQuestions = useCallback(
+    async (
+      scope: { id: string; isRoot: boolean },
+      term: string,
+      pageOffset: number,
+      pageLimit: number,
+    ) => {
+      const id = ++requestId.current;
+      setLoadingQuestions(true);
+      try {
+        const page = await questionApi.list({
+          // A folder is a pool: picking a topic asks for its whole subtree,
+          // not just the questions filed directly beneath it.
+          topicId: scope.isRoot ? scope.id : undefined,
+          subtopicId: scope.isRoot ? undefined : scope.id,
+          search: term || undefined,
+          offset: pageOffset,
+          limit: pageLimit,
+        });
+        if (id !== requestId.current) return;
+        setQuestions(page.items);
+        setTotal(page.total);
+      } catch (error) {
+        if (id !== requestId.current) return;
+        toast.error(error instanceof ApiError ? error.message : "Could not load questions");
+      } finally {
+        if (id === requestId.current) setLoadingQuestions(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!selectedId) {
       setQuestions([]);
+      setTotal(0);
       return;
     }
-    void loadQuestions(selectedId, search);
-  }, [selectedId, search, loadQuestions]);
+    void loadQuestions(
+      { id: selectedId, isRoot: selectedTopic?.parentId === null },
+      term,
+      offset,
+      limit,
+    );
+  }, [selectedId, selectedTopic, term, offset, limit, loadQuestions]);
+
+  /** Refetch whatever is selected right now (after a save, a delete, …). */
+  const reloadQuestions = useCallback(() => {
+    if (!selectedId) return;
+    void loadQuestions(
+      { id: selectedId, isRoot: selectedTopic?.parentId === null },
+      term,
+      offset,
+      limit,
+    );
+  }, [selectedId, selectedTopic, term, offset, limit, loadQuestions]);
 
   async function handleNameSubmit(name: string) {
     if (!nameDialog) return;
@@ -134,6 +192,9 @@ export default function QuestionsPage() {
     try {
       await questionApi.remove(question.id);
       setQuestions((current) => current.filter((item) => item.id !== question.id));
+      setTotal((current) => Math.max(0, current - 1));
+      // Deleting the last item on a page steps back rather than showing a blank one.
+      if (questions.length <= 1 && offset > 0) setOffset(Math.max(0, offset - limit));
       toast.success("Question deleted");
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Could not delete");
@@ -171,7 +232,7 @@ export default function QuestionsPage() {
         title="Question bank"
         description="Questions live in topics and subtopics. Reuse them in any exam."
       />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Topics tree */}
         <aside className="bg-card/30 flex w-72 shrink-0 flex-col border-r">
           <div className="flex items-center justify-between border-b px-4 py-3">
@@ -180,7 +241,7 @@ export default function QuestionsPage() {
               <Plus className="size-4" /> New
             </Button>
           </div>
-          <div className="flex-1 overflow-y-auto p-2">
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {loadingTopics ? (
               <div className="text-muted-foreground flex items-center gap-2 px-2 py-4 text-sm">
                 <Loader2 className="size-4 animate-spin" /> Loading…
@@ -231,7 +292,7 @@ export default function QuestionsPage() {
         </aside>
 
         {/* Questions */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between gap-4 border-b px-6 py-3">
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">
@@ -282,7 +343,7 @@ export default function QuestionsPage() {
                 title={search ? "No matches" : "Nothing here yet"}
                 description={
                   search
-                    ? "No questions match your search in this subtopic."
+                    ? "No questions match your search in this folder."
                     : "Add questions by hand, or let AI draft a set you can review."
                 }
                 action={
@@ -317,7 +378,9 @@ export default function QuestionsPage() {
                               {question.negativeMarks > 0 ? ` · −${question.negativeMarks}` : ""}
                             </span>
                           </div>
-                          <p className="line-clamp-2 text-sm">{question.prompt}</p>
+                          <p className="line-clamp-2 text-sm">
+                            <MathText>{question.prompt}</MathText>
+                          </p>
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -348,6 +411,19 @@ export default function QuestionsPage() {
                   </li>
                 ))}
               </ul>
+            )}
+            {!loadingQuestions && questions.length > 0 && (
+              <Pagination
+                total={total}
+                limit={limit}
+                offset={offset}
+                noun="questions"
+                className="mt-5"
+                onChange={({ limit: nextLimit, offset: nextOffset }) => {
+                  setLimit(nextLimit);
+                  setOffset(nextOffset);
+                }}
+              />
             )}
           </PageBody>
         </div>
@@ -422,7 +498,7 @@ export default function QuestionsPage() {
           // Refresh the bank so the new set is visible wherever it landed.
           void loadTopics();
           if (targetId !== selectedId) setSelectedId(targetId);
-          else if (selectedId) void loadQuestions(selectedId, search);
+          else reloadQuestions();
         }}
       />
     </>

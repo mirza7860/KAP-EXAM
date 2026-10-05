@@ -1,4 +1,5 @@
 import type {
+  Paged,
   Question,
   QuestionInput,
   Session,
@@ -137,13 +138,24 @@ export const topicApi = {
 };
 
 export const questionApi = {
-  list: (params: { subtopicId?: string; search?: string; includeArchived?: boolean } = {}) => {
+  list: (params: {
+    subtopicId?: string;
+    /** Whole topic subtree — a folder is a pool, not just its first level. */
+    topicId?: string;
+    search?: string;
+    includeArchived?: boolean;
+    limit?: number;
+    offset?: number;
+  } = {}) => {
     const query = new URLSearchParams();
     if (params.subtopicId) query.set("subtopicId", params.subtopicId);
+    if (params.topicId) query.set("topicId", params.topicId);
     if (params.search) query.set("search", params.search);
     if (params.includeArchived) query.set("includeArchived", "true");
+    if (params.limit) query.set("limit", String(params.limit));
+    if (params.offset) query.set("offset", String(params.offset));
     const suffix = query.toString() ? `?${query}` : "";
-    return api.get<Question[]>(`/api/questions${suffix}`);
+    return api.get<Paged<Question>>(`/api/questions${suffix}`);
   },
   create: (input: QuestionInput) => api.post<Question>("/api/questions", input),
   update: (id: string, input: QuestionInput) => api.patch<Question>(`/api/questions/${id}`, input),
@@ -170,7 +182,8 @@ export interface RosterEntry {
 }
 
 export interface BatchDetail extends BatchSummary {
-  roster: RosterEntry[];
+  /** The roster lives on `batchApi.students()` — it is paginated. */
+  roster?: RosterEntry[];
 }
 
 export const batchApi = {
@@ -182,6 +195,14 @@ export const batchApi = {
     copyRoster?: boolean;
   }) => api.post<BatchSummary>("/api/batches", input),
   get: (id: string) => api.get<BatchDetail>(`/api/batches/${id}`),
+  /** One page of the roster, ascending by roll no. */
+  students: (id: string, params: { limit?: number; offset?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (params.limit) query.set("limit", String(params.limit));
+    if (params.offset) query.set("offset", String(params.offset));
+    const suffix = query.toString() ? `?${query}` : "";
+    return api.get<Paged<RosterEntry>>(`/api/batches/${id}/students${suffix}`);
+  },
   update: (id: string, input: { name?: string; description?: string | null }) =>
     api.patch<BatchSummary>(`/api/batches/${id}`, input),
   remove: (id: string) => api.del<{ id: string; deleted: boolean }>(`/api/batches/${id}`),
@@ -244,7 +265,14 @@ export interface ExamLiveState {
 }
 
 export const examApi = {
-  list: () => api.get<ExamSummary[]>("/api/exams"),
+  /** One page of exams, newest first. */
+  list: (params: { limit?: number; offset?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (params.limit) query.set("limit", String(params.limit));
+    if (params.offset) query.set("offset", String(params.offset));
+    const suffix = query.toString() ? `?${query}` : "";
+    return api.get<Paged<ExamSummary>>(`/api/exams${suffix}`);
+  },
   create: (input: {
     batchId: string;
     title: string;
@@ -296,7 +324,13 @@ export interface ExamReportData {
   batchName: string;
   closedAt: string;
   maxScore: number;
+  /** One page of the cohort — the summary below covers all of it. */
   results: AttemptResultRow[];
+  summary?: { totalStudents: number; appeared: number; avgScore: number };
+  total?: number;
+  limit?: number;
+  offset?: number;
+  hasMore?: boolean;
 }
 
 export interface StudentHistoryRow extends AttemptResultRow {
@@ -315,11 +349,29 @@ export interface StudentReportData {
   totals: { score: number; maxScore: number; correct: number; wrong: number; unattempted: number };
   history: StudentHistoryRow[];
   batches: { id: string; name: string }[];
+  missedExams?: { id: string; title: string; batchId: string; batchName: string; startsAt: string }[];
+  /** Page metadata — `totals` always spans the full history. */
+  total?: number;
+  limit?: number;
+  offset?: number;
+  hasMore?: boolean;
+}
+
+function pageQuery(params: { limit?: number; offset?: number; batchId?: string } = {}) {
+  const query = new URLSearchParams();
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.offset) query.set("offset", String(params.offset));
+  if (params.batchId) query.set("batchId", params.batchId);
+  return query.toString() ? `?${query}` : "";
 }
 
 export const reportApi = {
-  exam: (examId: string) => api.get<ExamReportData>(`/api/reports/exams/${examId}`),
-  student: (studentId: string) => api.get<StudentReportData>(`/api/reports/students/${studentId}`),
+  exam: (examId: string, params: { limit?: number; offset?: number } = {}) =>
+    api.get<ExamReportData>(`/api/reports/exams/${examId}${pageQuery(params)}`),
+  student: (
+    studentId: string,
+    params: { limit?: number; offset?: number; batchId?: string } = {},
+  ) => api.get<StudentReportData>(`/api/reports/students/${studentId}${pageQuery(params)}`),
 };
 
 // ---------------------------------------------------------------------------

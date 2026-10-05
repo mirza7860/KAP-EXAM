@@ -24,6 +24,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PaperBuilder, type SourceDraft } from "@/components/paper-builder";
 import { PageBody, PageHeader } from "@/components/page-header";
 import { QUESTION_TYPE_LABELS } from "@/lib/question-form";
+import { MathText } from "@kap-exam/ui";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -42,6 +43,7 @@ import {
   ApiError,
   examApi,
   joinUrl,
+  mediaUrl,
   type ExamDetail,
   type ExamLiveState,
   type PaperItem,
@@ -304,24 +306,21 @@ export default function ExamDetailPage() {
                     </Button>
                   </div>
                 ) : (
-                  <ul className="divide-y">
-                    {exam.paper.map((item: PaperItem) => (
-                      <li key={item.questionId} className="flex items-start gap-3 py-3">
-                        <span className="text-muted-foreground w-6 pt-0.5 text-sm tabular-nums">
-                          {item.position + 1}.
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="line-clamp-2 text-sm">{item.question.prompt}</p>
-                          <p className="text-muted-foreground mt-0.5 text-xs">
-                            {QUESTION_TYPE_LABELS[item.question.type]}
-                          </p>
-                        </div>
-                        <span className="text-muted-foreground text-xs tabular-nums">
-                          {item.marks} mark{item.marks === 1 ? "" : "s"}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <>
+                    <p className="text-muted-foreground mb-3 text-xs">
+                      Answers and explanations — students never see this page. It is here for
+                      when a script is disputed and you need to show why an option is right.
+                    </p>
+                    <ul className="divide-y">
+                      {exam.paper.map((item: PaperItem, index: number) => (
+                        <PaperAnswer
+                          key={item.questionId}
+                          n={index + 1}
+                          item={item}
+                        />
+                      ))}
+                    </ul>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -387,5 +386,103 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
         <div className="text-sm font-medium">{value}</div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * One paper item with its answer key: the options with the right one marked,
+ * the numeric answer and tolerance, and the explanation — the evidence a
+ * teacher can put on screen when a student disputes a mark.
+ */
+function PaperAnswer({ n, item }: { n: number; item: PaperItem }) {
+  const q = item.question;
+  const isChoice = q.options.length > 0;
+
+  return (
+    <li className="flex items-start gap-3 py-4">
+      <span className="text-muted-foreground w-6 pt-0.5 text-sm tabular-nums">{n}.</span>
+
+      <div className="min-w-0 flex-1 space-y-2.5">
+        <p className="text-sm leading-relaxed">
+          <MathText>{q.prompt}</MathText>
+        </p>
+
+        {q.mediaKey && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={mediaUrl(q.mediaKey)}
+            alt="Question diagram"
+            className="border-border h-28 rounded-md border object-contain"
+          />
+        )}
+
+        <p className="text-muted-foreground text-xs">
+          {QUESTION_TYPE_LABELS[q.type]}
+          {q.negativeMarks > 0 ? ` · −${q.negativeMarks} for a wrong answer` : ""}
+        </p>
+
+        {isChoice && (
+          <ul className="grid gap-1.5 sm:grid-cols-2">
+            {q.options.map((option, index) => {
+              const correct = q.correctOptionIds.includes(option.id);
+              return (
+                <li
+                  key={option.id}
+                  className={
+                    "flex items-start gap-2 rounded-md px-2.5 py-1.5 text-sm " +
+                    (correct
+                      ? "border border-emerald-500/40 bg-emerald-500/10 font-medium"
+                      : "border border-transparent bg-muted/40")
+                  }
+                >
+                  {correct ? (
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <span className="text-muted-foreground mt-0.5 w-4 shrink-0 text-xs tabular-nums">
+                      {String.fromCharCode(65 + index)}
+                    </span>
+                  )}
+                  <span className="min-w-0">
+                    <MathText>{option.text}</MathText>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {q.type === "true_false" && (
+          <p className="text-sm">
+            <span className="eyebrow mr-2">Answer</span>
+            <span className="font-medium">
+              {q.correctOptionIds[0] === "true" ? "True" : "False"}
+            </span>
+          </p>
+        )}
+
+        {q.type === "numeric" && (
+          <p className="text-sm">
+            <span className="eyebrow mr-2">Answer</span>
+            <span className="font-mono font-medium tabular-nums">
+              {q.correctNumber}
+              {q.numericTolerance !== null ? ` ± ${q.numericTolerance}` : ""}
+            </span>
+          </p>
+        )}
+
+        {q.explanation && (
+          <div className="bg-muted/40 rounded-md border border-dashed border-border/80 px-3 py-2">
+            <p className="eyebrow mb-1">Why</p>
+            <p className="text-sm leading-relaxed">
+              <MathText>{q.explanation}</MathText>
+            </p>
+          </div>
+        )}
+      </div>
+
+      <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+        {item.marks} mark{item.marks === 1 ? "" : "s"}
+      </span>
+    </li>
   );
 }

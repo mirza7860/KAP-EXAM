@@ -20,10 +20,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import { LatexEditor } from "@kap-exam/ui";
 import { ApiError, api, mediaUrl, questionApi } from "@/lib/api";
 
 interface DraftState {
@@ -278,11 +278,13 @@ export function QuestionEditor({
 
           <div className="space-y-2">
             <Label htmlFor="q-prompt">Question</Label>
-            <Textarea
+            <LatexEditor
               id="q-prompt"
+              ariaLabel="Question prompt"
               value={draft.prompt}
-              onChange={(e) => patch({ prompt: e.target.value })}
-              placeholder="Type the question exactly as students should read it."
+              onChange={(prompt) => patch({ prompt })}
+              rows={4}
+              placeholder="Type the question exactly as students should read it. Use $…$ for maths, $$…$$ for a display line."
             />
           </div>
 
@@ -369,6 +371,10 @@ export function QuestionEditor({
                   );
                 })}
               </div>
+              <p className="text-muted-foreground text-xs">
+                Type maths straight in: <code className="font-mono">$x^2$</code>,{" "}
+                <code className="font-mono">$\sqrt{2}$</code>.
+              </p>
             </div>
           )}
 
@@ -419,12 +425,13 @@ export function QuestionEditor({
 
           <div className="space-y-2">
             <Label htmlFor="q-explanation">Explanation (optional)</Label>
-            <Textarea
+            <LatexEditor
               id="q-explanation"
+              ariaLabel="Explanation"
               value={draft.explanation}
-              onChange={(e) => patch({ explanation: e.target.value })}
-              placeholder="Shown when reviewing answers."
-              className="min-h-16"
+              onChange={(explanation) => patch({ explanation })}
+              rows={3}
+              placeholder="Why that answer is correct. Shown when reviewing answers."
             />
           </div>
 

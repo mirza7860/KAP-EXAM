@@ -8,6 +8,7 @@ import { and, asc, desc, eq, inArray, isNull, like, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import type { AppBindings } from "../env.js";
 import { badRequest, notFound } from "../lib/http.js";
+import { paginate, pageParams } from "../lib/pagination.js";
 import { deserializeQuestion, serializeQuestion } from "../lib/question.js";
 
 /**
@@ -131,23 +132,33 @@ questionRoutes.get("/", async (c) => {
   const subtopicId = c.req.query("subtopicId");
   const topicId = c.req.query("topicId");
   const search = c.req.query("search");
-  const limit = Math.min(Number(c.req.query("limit") ?? 50) || 50, 200);
-  const offset = Math.max(Number(c.req.query("offset") ?? 0) || 0, 0);
+  const page = pageParams(c);
 
   const conditions = [];
   if (subtopicId) conditions.push(eq(schema.questions.subtopicId, subtopicId));
   if (topicId) conditions.push(inArray(schema.questions.subtopicId, await topicSubtree(db, topicId)));
   if (search) conditions.push(like(schema.questions.prompt, `%${search}%`));
+  const where = conditions.length ? and(...conditions) : undefined;
 
-  const rows = await db
-    .select()
+  const totalRow = await db
+    .select({ n: sql<number>`count(*)` })
     .from(schema.questions)
-    .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(schema.questions.createdAt))
-    .limit(limit)
-    .offset(offset);
+    .where(where)
+    .get();
+  const total = Number(totalRow?.n ?? 0);
 
-  return c.json({ data: rows.map(deserializeQuestion) });
+  const rows =
+    total === 0
+      ? []
+      : await db
+          .select()
+          .from(schema.questions)
+          .where(where)
+          .orderBy(desc(schema.questions.createdAt))
+          .limit(page.limit)
+          .offset(page.offset);
+
+  return c.json({ data: paginate(rows.map(deserializeQuestion), total, page) });
 });
 
 questionRoutes.post("/", async (c) => {

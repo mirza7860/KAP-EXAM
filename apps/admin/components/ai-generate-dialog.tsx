@@ -1,6 +1,7 @@
 "use client";
 
 import type { QuestionInput, QuestionType, Topic } from "@kap-exam/shared";
+import { MathText } from "@kap-exam/ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -391,7 +392,9 @@ function ReviewDraft({
       <div className="flex items-start justify-between gap-2">
         <button type="button" onClick={() => setOpen((o) => !o)} className="min-w-0 flex-1 text-left">
           <span className="text-muted-foreground mr-2 text-xs tabular-nums">{index + 1}.</span>
-          <span className="text-sm">{draft.prompt}</span>
+          <span className="text-sm">
+            <MathText>{draft.prompt}</MathText>
+          </span>
         </button>
         <Badge variant="secondary" className="shrink-0">
           {draft.type === "mcq_single" ? "MCQ" : draft.type === "mcq_multi" ? "Multi" : draft.type === "true_false" ? "T/F" : "Num"}

@@ -96,7 +96,22 @@ export const examReportSchema = z.object({
   batchName: z.string(),
   closedAt: z.coerce.date(),
   maxScore: z.number(),
+  /**
+   * `results` is one page of the cohort; `summary` is computed over all of it
+   * so the averages stay honest when a roster spans several pages.
+   */
   results: z.array(attemptResultSchema),
+  summary: z
+    .object({
+      totalStudents: z.number().int().min(0),
+      appeared: z.number().int().min(0),
+      avgScore: z.number(),
+    })
+    .optional(),
+  total: z.number().int().min(0).optional(),
+  limit: z.number().int().min(1).optional(),
+  offset: z.number().int().min(0).optional(),
+  hasMore: z.boolean().optional(),
 });
 
 export type ExamReport = z.infer<typeof examReportSchema>;
@@ -115,7 +130,32 @@ export const studentReportSchema = z.object({
     wrong: z.number().int().min(0),
     unattempted: z.number().int().min(0),
   }),
-  history: z.array(attemptResultSchema.extend({ examTitle: z.string(), takenAt: z.coerce.date() })),
+  history: z.array(
+    attemptResultSchema.extend({
+      examTitle: z.string(),
+      takenAt: z.coerce.date(),
+      /** Which cohort the exam was given to — drives the batch tabs. */
+      batchId: z.string().optional(),
+      batchName: z.string().optional(),
+    }),
+  ),
+  /** Exams in this student's batches that were given but never sat. */
+  missedExams: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        title: z.string(),
+        batchId: z.string(),
+        batchName: z.string(),
+        startsAt: z.string(),
+      }),
+    )
+    .optional(),
+  /** Page metadata — `totals` and `examsTaken` always cover the full history. */
+  total: z.number().int().min(0).optional(),
+  limit: z.number().int().min(1).optional(),
+  offset: z.number().int().min(0).optional(),
+  hasMore: z.boolean().optional(),
 });
 
 export type StudentReport = z.infer<typeof studentReportSchema>;

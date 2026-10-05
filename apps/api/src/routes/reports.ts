@@ -4,36 +4,41 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import type { AppBindings } from "../env.js";
 import { notFound } from "../lib/http.js";
+import { paginate, pageParams } from "../lib/pagination.js";
 import type { Question } from "@kap-exam/shared";
 
 /**
  * Reports. Per-exam rosters (ascending by roll no) and per-student
  * cumulative report cards that span batches/semesters.
+ *
+ * Scoring is bulk: the frozen paper is read once per exam and every saved
+ * answer in one query, then graded in memory. The old shape — reload the
+ * paper and the answers once *per attempt* — was 1 + 2N round trips for an
+ * N-student roster, which is exactly what made a 50-seat report crawl.
  */
 export const reportRoutes = new Hono<AppBindings>();
 
-async function paperQuestions(db: AppBindings["Variables"]["db"], examId: string): Promise<Question[]> {
-  const items = await db
-    .select()
-    .from(schema.examPaperItems)
-    .where(eq(schema.examPaperItems.examId, examId));
-  return items.map((it) => JSON.parse(it.snapshotJson) as Question);
+type Db = AppBindings["Variables"]["db"];
+
+interface Score {
+  score: number;
+  maxScore: number;
+  correct: number;
+  wrong: number;
+  unattempted: number;
 }
 
-/** Score an attempt from frozen paper + saved answers. */
-async function scoreAttempt(
-  db: AppBindings["Variables"]["db"],
-  attemptId: string,
-  examId: string,
-): Promise<{ score: number; maxScore: number; correct: number; wrong: number; unattempted: number }> {
-  const paper = await paperQuestions(db, examId);
-  const saved = await db.select().from(schema.answers).where(eq(schema.answers.attemptId, attemptId));
-  const byQ = new Map(saved.map((a) => [a.questionId, a]));
+type AnswerRow = typeof schema.answers.$inferSelect;
+
+/** Grade one attempt from its frozen paper and saved answers. */
+function scoreAttempt(paper: Question[], answers: AnswerRow[]): Score {
+  const byQ = new Map(answers.map((a) => [a.questionId, a]));
   let score = 0;
   let correct = 0;
   let wrong = 0;
   let unattempted = 0;
   let maxScore = 0;
+
   for (const q of paper) {
     maxScore += q.marks;
     const ans = byQ.get(q.id);
@@ -42,7 +47,7 @@ async function scoreAttempt(
       continue;
     }
     if (ans.isCorrect === null || ans.isCorrect === undefined) {
-      // fall back to awardedMarks presence: if no selection and no numeric, unattempted
+      // No stored verdict yet: fall back to "did they actually answer?".
       let sel: string[] = [];
       try {
         sel = JSON.parse(ans.selectedJson as string) as string[];
@@ -60,12 +65,72 @@ async function scoreAttempt(
     else if (ans.isCorrect) correct++;
     else wrong++;
   }
+
   return { score, maxScore, correct, wrong, unattempted };
+}
+
+/**
+ * Grade a whole cohort in two extra queries regardless of cohort size:
+ * one for every paper item, one for every answer row.
+ */
+async function scoreAttempts(
+  db: Db,
+  attempts: { id: string; examId: string }[],
+): Promise<Map<string, Score>> {
+  const out = new Map<string, Score>();
+  if (attempts.length === 0) return out;
+
+  const examIds = [...new Set(attempts.map((a) => a.examId))];
+  const paperRows = await db
+    .select()
+    .from(schema.examPaperItems)
+    .where(inArray(schema.examPaperItems.examId, examIds));
+  const paperByExam = new Map<string, Question[]>();
+  for (const row of paperRows) {
+    const list = paperByExam.get(row.examId) ?? [];
+    list.push(JSON.parse(row.snapshotJson) as Question);
+    paperByExam.set(row.examId, list);
+  }
+
+  const answerRows = await db
+    .select()
+    .from(schema.answers)
+    .where(inArray(schema.answers.attemptId, attempts.map((a) => a.id)));
+  const answersByAttempt = new Map<string, AnswerRow[]>();
+  for (const row of answerRows) {
+    const list = answersByAttempt.get(row.attemptId) ?? [];
+    list.push(row);
+    answersByAttempt.set(row.attemptId, list);
+  }
+
+  for (const attempt of attempts) {
+    out.set(
+      attempt.id,
+      scoreAttempt(paperByExam.get(attempt.examId) ?? [], answersByAttempt.get(attempt.id) ?? []),
+    );
+  }
+  return out;
+}
+
+/** Persist a computed score for a finished attempt that never got one. */
+async function persistMissingScore(
+  db: Db,
+  attempt: { id: string; status: string; score: number | null; maxScore: number | null },
+  scored: Score,
+): Promise<void> {
+  if ((attempt.status === "submitted" || attempt.status === "timed_out") && !attempt.score) {
+    await db
+      .update(schema.attempts)
+      .set({ score: scored.score, maxScore: scored.maxScore })
+      .where(eq(schema.attempts.id, attempt.id));
+  }
 }
 
 reportRoutes.get("/exams/:examId", async (c) => {
   const db = c.get("db");
   const examId = c.req.param("examId");
+  const page = pageParams(c);
+
   const exam = await db.select().from(schema.exams).where(eq(schema.exams.id, examId)).get();
   if (!exam) throw notFound("Exam not found");
   const batch = await db.select().from(schema.batches).where(eq(schema.batches.id, exam.batchId)).get();
@@ -86,6 +151,8 @@ reportRoutes.get("/exams/:examId", async (c) => {
       ? await db.select().from(schema.students).where(inArray(schema.students.id, [...rosterIds]))
       : [];
   const studentMap = new Map(allStudents.map((s) => [s.id, s]));
+
+  const scores = await scoreAttempts(db, attempts.map((a) => ({ id: a.id, examId })));
 
   const results: AttemptResult[] = [];
   for (const sid of rosterIds) {
@@ -108,11 +175,8 @@ reportRoutes.get("/exams/:examId", async (c) => {
       });
       continue;
     }
-    const sc = await scoreAttempt(db, att.id, examId);
-    // persist computed score if attempt closed and score missing
-    if ((att.status === "submitted" || att.status === "timed_out") && (att.score === null || att.score === undefined)) {
-      await db.update(schema.attempts).set({ score: sc.score, maxScore: sc.maxScore }).where(eq(schema.attempts.id, att.id));
-    }
+    const sc = scores.get(att.id) ?? { score: 0, maxScore: 0, correct: 0, wrong: 0, unattempted: 0 };
+    await persistMissingScore(db, att, sc);
     results.push({
       attemptId: att.id,
       studentId: s.id,
@@ -132,20 +196,42 @@ reportRoutes.get("/exams/:examId", async (c) => {
   results.sort((a, b) => a.rollNo.localeCompare(b.rollNo, undefined, { numeric: true }));
 
   const maxScore = results.reduce((m, r) => Math.max(m, r.maxScore), 0);
+  // Summary covers the *whole* cohort even though `results` is one page of it.
+  const appeared = results.filter((r) => r.attemptId !== "").length;
+  const avgScore =
+    appeared > 0
+      ? results.filter((r) => r.attemptId !== "").reduce((sum, r) => sum + r.score, 0) / appeared
+      : 0;
+
+  const paged = paginate(results, results.length, page);
   const report: ExamReport = {
     examId,
     examTitle: exam.title,
     batchName: batch?.name ?? "",
     closedAt: exam.closedAt ?? exam.endsAt,
     maxScore,
-    results,
+    results: paged.items,
   };
-  return c.json({ data: report });
+
+  return c.json({
+    data: {
+      ...report,
+      summary: { totalStudents: results.length, appeared, avgScore },
+      total: paged.total,
+      limit: paged.limit,
+      offset: paged.offset,
+      hasMore: paged.hasMore,
+    },
+  });
 });
 
 reportRoutes.get("/students/:studentId", async (c) => {
   const db = c.get("db");
   const studentId = c.req.param("studentId");
+  const page = pageParams(c);
+  /** Optional batch tab — filters the history, never the overall totals. */
+  const batchFilter = c.req.query("batchId") ?? "";
+
   const student = await db.select().from(schema.students).where(eq(schema.students.id, studentId)).get();
   if (!student) throw notFound("Student not found");
 
@@ -173,15 +259,18 @@ reportRoutes.get("/students/:studentId", async (c) => {
       ? await db.select().from(schema.batches).where(inArray(schema.batches.id, memberBatchIds))
       : [];
 
+  const scores = await scoreAttempts(db, attempts.map((a) => ({ id: a.id, examId: a.examId })));
+
   let examsTaken = 0;
   let examsMissed = 0;
   const totals = { score: 0, maxScore: 0, correct: 0, wrong: 0, unattempted: 0 };
-  const history: StudentReport["history"] = [];
+  type HistoryRow = StudentReport["history"][number] & { batchId: string; batchName: string };
+  const history: HistoryRow[] = [];
 
   for (const att of attempts) {
     const exam = examMap.get(att.examId);
     if (!exam) continue;
-    const sc = await scoreAttempt(db, att.id, att.examId);
+    const sc = scores.get(att.id) ?? { score: 0, maxScore: 0, correct: 0, wrong: 0, unattempted: 0 };
     examsTaken++;
     totals.score += att.score ?? sc.score;
     totals.maxScore += sc.maxScore;
@@ -202,33 +291,65 @@ reportRoutes.get("/students/:studentId", async (c) => {
       violationCount: att.violationCount ?? 0,
       examTitle: exam.title,
       takenAt: att.startedAt,
-      // extra for tabs (not in zod schema but harmless at runtime; strip before validation on client)
-      ...({ batchId: exam.batchId, batchName: batchMap.get(exam.batchId)?.name ?? "" } as object),
+      batchId: exam.batchId,
+      batchName: batchMap.get(exam.batchId)?.name ?? "",
     });
   }
 
-  // examsMissed: published/closed exams in member batches with no attempt
+  // Exams in this student's batches that were given but never sat.
+  const missedExams: {
+    id: string;
+    title: string;
+    batchId: string;
+    batchName: string;
+    startsAt: string;
+  }[] = [];
   if (memberBatchIds.length > 0) {
     const batchExams = await db.select().from(schema.exams).where(inArray(schema.exams.batchId, memberBatchIds));
     const attempted = new Set(attempts.map((a) => a.examId));
     for (const e of batchExams) {
       if ((e.status === "published" || e.status === "closed") && !attempted.has(e.id)) {
         examsMissed++;
+        missedExams.push({
+          id: e.id,
+          title: e.title,
+          batchId: e.batchId,
+          batchName: batchMap.get(e.batchId)?.name ?? "",
+          startsAt: String(e.startsAt),
+        });
       }
     }
+    missedExams.sort((a, b) => (a.startsAt < b.startsAt ? 1 : -1));
   }
 
   history.sort((a, b) => new Date(b.takenAt).getTime() - new Date(a.takenAt).getTime());
 
-  const report: StudentReport & { batches: { id: string; name: string }[] } = {
+  // Totals span every attempt; only the visible slice is paginated — and when a
+  // batch tab is open, only that batch's rows are ever in scope.
+  const scoped = batchFilter ? history.filter((row) => row.batchId === batchFilter) : history;
+  const paged = paginate(scoped, scoped.length, page);
+
+  const report: StudentReport & {
+    batches: { id: string; name: string }[];
+    missedExams: typeof missedExams;
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  } = {
     studentId,
     name: student.name,
     rollNo: student.rollNo,
     examsTaken,
     examsMissed,
     totals,
-    history,
+    history: paged.items,
     batches: memberBatches.map((b) => ({ id: b.id, name: b.name })),
+    missedExams,
+    total: paged.total,
+    limit: paged.limit,
+    offset: paged.offset,
+    hasMore: paged.hasMore,
   };
   return c.json({ data: report });
 });

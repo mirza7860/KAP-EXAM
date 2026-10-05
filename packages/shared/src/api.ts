@@ -35,3 +35,23 @@ export type ApiErrorCode = (typeof apiErrorCodes)[keyof typeof apiErrorCodes];
 export function ok<T extends z.ZodTypeAny>(data: T) {
   return z.object({ data });
 }
+
+/**
+ * Every paginated list answers with this shape, so callers page with numbers
+ * instead of pulling a whole table and slicing it in the browser.
+ */
+export const pageMetaSchema = z.object({
+  total: z.number().int().min(0),
+  limit: z.number().int().min(1),
+  offset: z.number().int().min(0),
+  hasMore: z.boolean(),
+});
+
+export type PageMeta = z.infer<typeof pageMetaSchema>;
+
+/** `pageMeta` plus the slice itself. */
+export function pagedSchema<T extends z.ZodTypeAny>(item: T) {
+  return pageMetaSchema.extend({ items: z.array(item) });
+}
+
+export type Paged<T> = PageMeta & { items: T[] };

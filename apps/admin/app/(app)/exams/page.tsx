@@ -11,13 +11,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
+import { Pagination } from "@/components/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageBody, PageHeader } from "@/components/page-header";
 import { ClipboardList, Plus } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ApiError, batchApi, examApi, type BatchSummary, type ExamSummary } from "@/lib/api";
+import { ApiError, batchApi, examApi, type ExamSummary } from "@/lib/api";
 
 function statusVariant(status: ExamSummary["status"]) {
   if (status === "published") return "success" as const;
@@ -25,27 +26,39 @@ function statusVariant(status: ExamSummary["status"]) {
   return "secondary" as const;
 }
 
+const PAGE_SIZE = 20;
+
 export default function ExamsPage() {
   const [exams, setExams] = useState<ExamSummary[]>([]);
+  const [total, setTotal] = useState(0);
   const [batchCount, setBatchCount] = useState<number | null>(null);
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [examList, batchList] = await Promise.all([examApi.list(), batchApi.list()]);
-      setExams(examList);
-      setBatchCount(batchList.length);
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Could not load exams");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (nextOffset: number, nextLimit: number) => {
+      setLoading(true);
+      try {
+        const [examPage, batchList] = await Promise.all([
+          examApi.list({ limit: nextLimit, offset: nextOffset }),
+          batchApi.list(),
+        ]);
+        setExams(examPage.items);
+        setTotal(examPage.total);
+        setBatchCount(batchList.length);
+      } catch (error) {
+        toast.error(error instanceof ApiError ? error.message : "Could not load exams");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load(offset, limit);
+  }, [load, offset, limit]);
 
   return (
     <>
@@ -74,7 +87,7 @@ export default function ExamsPage() {
               </Button>
             }
           />
-        ) : exams.length === 0 ? (
+        ) : total === 0 ? (
           <EmptyState
             icon={<ClipboardList className="size-5" />}
             title="No exams yet"
@@ -124,6 +137,16 @@ export default function ExamsPage() {
                 ))}
               </TableBody>
             </Table>
+            <Pagination
+              total={total}
+              limit={limit}
+              offset={offset}
+              noun="exams"
+              onChange={({ limit: nextLimit, offset: nextOffset }) => {
+                setLimit(nextLimit);
+                setOffset(nextOffset);
+              }}
+            />
           </div>
         )}
       </PageBody>

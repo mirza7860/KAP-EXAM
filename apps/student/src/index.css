@@ -1,6 +1,7 @@
 /* Self-hosted: the exam must render offline, so no CDN font at runtime. */
 @import "@fontsource-variable/fraunces/full.css";
 @import "tailwindcss";
+@import "katex/dist/katex.min.css";
 @import "../../../packages/ui/src/styles/theme.css";
 
 /* Tailwind v4 scans source files; the shared UI package lives outside this app. */

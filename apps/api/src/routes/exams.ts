@@ -10,6 +10,7 @@ import { Hono } from "hono";
 import type { AppBindings } from "../env.js";
 import { callExamSession } from "../lib/durable.js";
 import { badRequest, notFound } from "../lib/http.js";
+import { paginate, pageParams } from "../lib/pagination.js";
 import { deserializeQuestion } from "../lib/question.js";
 
 /**
@@ -96,25 +97,50 @@ async function loadPaper(db: Database, examId: string) {
 
 examRoutes.get("/", async (c) => {
   const db = c.get("db");
-  const rows = await db.select().from(schema.exams).orderBy(desc(schema.exams.createdAt));
+  const page = pageParams(c);
 
+  const totalRow = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(schema.exams)
+    .get();
+  const total = Number(totalRow?.n ?? 0);
+
+  const rows =
+    total === 0
+      ? []
+      : await db
+          .select()
+          .from(schema.exams)
+          .orderBy(desc(schema.exams.createdAt))
+          .limit(page.limit)
+          .offset(page.offset);
+
+  const pageIds = rows.map((row) => row.id);
   const batchRows = await db
     .select({ id: schema.batches.id, name: schema.batches.name })
     .from(schema.batches);
   const batchName = new Map(batchRows.map((row) => [row.id, row.name]));
 
-  const counts = await db
-    .select({ examId: schema.examPaperItems.examId, count: sql<number>`count(*)` })
-    .from(schema.examPaperItems)
-    .groupBy(schema.examPaperItems.examId);
+  // Counts only for the page we are actually returning.
+  const counts = pageIds.length
+    ? await db
+        .select({ examId: schema.examPaperItems.examId, count: sql<number>`count(*)` })
+        .from(schema.examPaperItems)
+        .where(inArray(schema.examPaperItems.examId, pageIds))
+        .groupBy(schema.examPaperItems.examId)
+    : [];
   const countMap = new Map(counts.map((row) => [row.examId, Number(row.count)]));
 
   return c.json({
-    data: rows.map((row) => ({
-      ...row,
-      batchName: batchName.get(row.batchId) ?? "Unknown batch",
-      questionCount: countMap.get(row.id) ?? 0,
-    })),
+    data: paginate(
+      rows.map((row) => ({
+        ...row,
+        batchName: batchName.get(row.batchId) ?? "Unknown batch",
+        questionCount: countMap.get(row.id) ?? 0,
+      })),
+      total,
+      page,
+    ),
   });
 });
 

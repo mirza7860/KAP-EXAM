@@ -4,6 +4,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import type { AppBindings } from "../env.js";
 import { badRequest, notFound } from "../lib/http.js";
+import { paginate, pageParams } from "../lib/pagination.js";
 
 /**
  * Batches = semester cohorts.
@@ -88,19 +89,15 @@ batchRoutes.get("/:id", async (c) => {
   const batch = await db.select().from(schema.batches).where(eq(schema.batches.id, id)).get();
   if (!batch) throw notFound("Batch not found");
 
-  const roster = await db
-    .select({
-      studentId: schema.students.id,
-      name: schema.students.name,
-      rollNo: schema.students.rollNo,
-      joinedAt: schema.batchStudents.joinedAt,
-    })
+  // The roster is served by GET /:id/students (paginated) — a batch can hold
+  // hundreds of students and the detail call only needs the headcount.
+  const countRow = await db
+    .select({ n: sql<number>`count(*)` })
     .from(schema.batchStudents)
-    .innerJoin(schema.students, eq(schema.batchStudents.studentId, schema.students.id))
     .where(eq(schema.batchStudents.batchId, id))
-    .orderBy(asc(schema.students.rollNo));
+    .get();
 
-  return c.json({ data: { ...batch, studentCount: roster.length, roster } });
+  return c.json({ data: { ...batch, studentCount: Number(countRow?.n ?? 0) } });
 });
 
 batchRoutes.patch("/:id", async (c) => {
@@ -131,19 +128,35 @@ batchRoutes.delete("/:id", async (c) => {
 });
 
 batchRoutes.get("/:id/students", async (c) => {
-  const roster = await c
-    .get("db")
-    .select({
-      studentId: schema.students.id,
-      name: schema.students.name,
-      rollNo: schema.students.rollNo,
-      joinedAt: schema.batchStudents.joinedAt,
-    })
+  const db = c.get("db");
+  const batchId = c.req.param("id");
+  const page = pageParams(c);
+
+  const totalRow = await db
+    .select({ n: sql<number>`count(*)` })
     .from(schema.batchStudents)
-    .innerJoin(schema.students, eq(schema.batchStudents.studentId, schema.students.id))
-    .where(eq(schema.batchStudents.batchId, c.req.param("id")))
-    .orderBy(asc(schema.students.rollNo));
-  return c.json({ data: roster });
+    .where(eq(schema.batchStudents.batchId, batchId))
+    .get();
+  const total = Number(totalRow?.n ?? 0);
+
+  const roster =
+    total === 0
+      ? []
+      : await db
+          .select({
+            studentId: schema.students.id,
+            name: schema.students.name,
+            rollNo: schema.students.rollNo,
+            joinedAt: schema.batchStudents.joinedAt,
+          })
+          .from(schema.batchStudents)
+          .innerJoin(schema.students, eq(schema.batchStudents.studentId, schema.students.id))
+          .where(eq(schema.batchStudents.batchId, batchId))
+          .orderBy(asc(schema.students.rollNo))
+          .limit(page.limit)
+          .offset(page.offset);
+
+  return c.json({ data: paginate(roster, total, page) });
 });
 
 /** Add a student by id (existing person) or by name+roll (upsert a person). */

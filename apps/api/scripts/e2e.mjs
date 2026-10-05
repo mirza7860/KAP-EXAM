@@ -74,8 +74,10 @@ let batchId;
   await api("POST", `/api/batches/${batchId}/students`, { name: "E2E Ana", rollNo: "E2E-01" });
   // messy duplicate must resolve to the same person
   await api("POST", `/api/batches/${batchId}/students`, { name: "E2E Ana", rollNo: "e2e 01" });
+  const roster = await api("GET", `/api/batches/${batchId}/students?limit=10`);
+  check("roll normalization dedupes (1 student)", roster.body.data.total === 1 && roster.body.data.items.length === 1);
   const detail = await api("GET", `/api/batches/${batchId}`);
-  check("roll normalization dedupes (1 student)", detail.body.data.roster.length === 1);
+  check("batch detail reports headcount only", detail.body.data.studentCount === 1 && !detail.body.data.roster);
 }
 
 // exam lifecycle
@@ -127,14 +129,33 @@ let attemptId;
   check("result fetch shows breakdown", prev.body.data.result?.score === 10);
 }
 
-// reports
+// reports + pagination envelope
 {
   const examRep = await api("GET", `/api/reports/exams/${exam.id}`);
   const ana = examRep.body.data.results.find((r) => r.rollNo === "E2E-01");
   check("exam report has Ana 10/10", ana?.score === 10);
+  check("exam report summary covers the cohort", examRep.body.data.summary?.appeared === 1);
   const studentId = ana.studentId;
   const stuRep = await api("GET", `/api/reports/students/${studentId}`);
   check("student report totals 10/10", stuRep.body.data.totals.score === 10 && stuRep.body.data.examsTaken === 1);
+
+  // every list answers with the same page envelope
+  const examsPage = await api("GET", "/api/exams?limit=1&offset=0");
+  check(
+    "exams list is paged",
+    examsPage.body.data.items.length === 1 &&
+      examsPage.body.data.total >= 1 &&
+      typeof examsPage.body.data.hasMore === "boolean",
+  );
+  const questionsPage = await api("GET", `/api/questions?subtopicId=${subId}&limit=1`);
+  check(
+    "questions list pages the subtopic pool",
+    questionsPage.body.data.items.length === 1 && questionsPage.body.data.total === 2,
+  );
+  const rosterPage = await api("GET", `/api/batches/${batchId}/students?limit=1&offset=1`);
+  check("roster offset past the end is empty", rosterPage.body.data.items.length === 0 && rosterPage.body.data.total === 1);
+  const reportPage = await api("GET", `/api/reports/exams/${exam.id}?limit=1&offset=0`);
+  check("report roster pages without losing the summary", reportPage.body.data.results.length === 1 && reportPage.body.data.summary?.totalStudents === 1);
 }
 
 // batch delete

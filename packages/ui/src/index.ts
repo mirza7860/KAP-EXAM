@@ -24,3 +24,5 @@ export {
 } from "./components/dialog";
 export { Toaster, toast } from "./components/toaster";
 export type { ToasterProps } from "./components/toaster";
+export { MathText, parseMath } from "./components/math-text";
+export { LatexEditor } from "./components/latex-editor";

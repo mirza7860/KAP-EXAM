@@ -1,4 +1,4 @@
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Logo, Progress, Toaster, toast } from "@kap-exam/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Logo, MathText, Progress, Toaster, toast } from "@kap-exam/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { codeFromLocation, mediaUrl, studentApi, StudentApiError, type JoinData } from "./lib/api";
 
@@ -271,7 +271,9 @@ export default function App() {
                 <Badge variant="secondary">{current.marks}m</Badge>
                 <span className="text-muted-foreground text-xs">Question {index + 1}</span>
               </div>
-              <p className="text-[15px] leading-relaxed">{current.prompt}</p>
+              <p className="text-[15px] leading-relaxed">
+                <MathText>{current.prompt}</MathText>
+              </p>
               {current.mediaKey && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={mediaUrl(current.mediaKey)} alt="Question diagram" className="max-h-64 w-full rounded-lg border object-contain" />
@@ -338,7 +340,7 @@ export default function App() {
                         <span className={`flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${sel ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
                           {String.fromCharCode(65 + i)}
                         </span>
-                        {o.text}
+                        <MathText>{o.text}</MathText>
                       </button>
                     );
                   })}
