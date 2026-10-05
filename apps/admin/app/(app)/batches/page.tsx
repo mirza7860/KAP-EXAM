@@ -27,16 +27,19 @@ export default function BatchesPage() {
   const [copyFrom, setCopyFrom] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<BatchSummary | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setBatches(await batchApi.list());
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Could not load batches");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // `loading` starts true and this only ever settles it — the effect never
+  // commits synchronously.
+  const load = useCallback(
+    () =>
+      batchApi
+        .list()
+        .then((list) => setBatches(list))
+        .catch((error) => {
+          toast.error(error instanceof ApiError ? error.message : "Could not load batches");
+        })
+        .finally(() => setLoading(false)),
+    [],
+  );
 
   useEffect(() => {
     void load();

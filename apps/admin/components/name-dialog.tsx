@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
 /** Small create/rename dialog used for topics and subtopics. */
@@ -40,9 +40,14 @@ export function NameDialog({
   const [name, setName] = useState(initialName);
   const [pending, setPending] = useState(false);
 
-  useEffect(() => {
+  // Start from a clean slate each time it opens. React wants this committed
+  // during render, guarded by the previous value, rather than in an effect
+  // that would render once with the old name and then correct itself.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) setName(initialName);
-  }, [open, initialName]);
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();

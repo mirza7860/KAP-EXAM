@@ -36,22 +36,21 @@ export default function ExamsPage() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async (nextOffset: number, nextLimit: number) => {
-    setLoading(true);
-    try {
-      const [examPage, batchList] = await Promise.all([
-        examApi.list({ limit: nextLimit, offset: nextOffset }),
-        batchApi.list(),
-      ]);
-      setExams(examPage.items);
-      setTotal(examPage.total);
-      setBatchCount(batchList.length);
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Could not load exams");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // The effect only settles this; the pager re-arms the skeleton itself.
+  const load = useCallback(
+    (nextOffset: number, nextLimit: number) =>
+      Promise.all([examApi.list({ limit: nextLimit, offset: nextOffset }), batchApi.list()])
+        .then(([examPage, batchList]) => {
+          setExams(examPage.items);
+          setTotal(examPage.total);
+          setBatchCount(batchList.length);
+        })
+        .catch((error) => {
+          toast.error(error instanceof ApiError ? error.message : "Could not load exams");
+        })
+        .finally(() => setLoading(false)),
+    [],
+  );
 
   useEffect(() => {
     void load(offset, limit);
@@ -144,6 +143,7 @@ export default function ExamsPage() {
               offset={offset}
               noun="exams"
               onChange={({ limit: nextLimit, offset: nextOffset }) => {
+                setLoading(true);
                 setLimit(nextLimit);
                 setOffset(nextOffset);
               }}

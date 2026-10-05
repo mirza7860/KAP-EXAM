@@ -62,37 +62,38 @@ export default function ExamDetailPage() {
   const [savingPaper, setSavingPaper] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [confirm, setConfirm] = useState<"publish" | "close" | "reveal" | null>(null);
-  const [pending, setPending] = useState(false);
   const [live, setLive] = useState<ExamLiveState | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setExam(await examApi.get(examId));
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Could not load the exam");
-    } finally {
-      setLoading(false);
-    }
-  }, [examId]);
+  // `loading` starts true and this only settles it; onConfirm re-fetches from
+  // an event handler where the page already has data worth keeping on screen.
+  const load = useCallback(
+    () =>
+      examApi
+        .get(examId)
+        .then((next) => setExam(next))
+        .catch((error) => {
+          toast.error(error instanceof ApiError ? error.message : "Could not load the exam");
+        })
+        .finally(() => setLoading(false)),
+    [examId],
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  // Poll the live roster while the exam is running.
+  // Poll the live roster while the exam is running. Nothing to clear when it
+  // stops: the snapshot is read through `liveState`, which ignores a roster
+  // for an exam that is no longer open.
   useEffect(() => {
-    if (exam?.status !== "published") {
-      setLive(null);
-      return;
-    }
+    if (exam?.status !== "published") return;
     let active = true;
     const tick = async () => {
       try {
         const state = await examApi.live(examId);
         if (active) setLive(state);
       } catch {
-        /* transient — keep the last snapshot */
+        /* transient - keep the last snapshot */
       }
     };
     void tick();
@@ -103,9 +104,15 @@ export default function ExamDetailPage() {
     };
   }, [exam?.status, examId]);
 
+  // The roster only means something while the exam is open. A closed exam
+  // keeps the last snapshot in state but reads it through this, so nothing
+  // has to be cleared from an effect.
+  const liveState = exam?.status === "published" ? live : null;
+
   async function onConfirm() {
     if (!confirm) return;
-    setPending(true);
+    // ConfirmDialog owns the spinner: it awaits this and disables itself, so
+    // there is no second copy of that flag to keep in sync here.
     try {
       if (confirm === "publish") {
         await examApi.publish(examId);
@@ -125,8 +132,6 @@ export default function ExamDetailPage() {
       await load();
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Action failed");
-    } finally {
-      setPending(false);
     }
   }
 
@@ -245,11 +250,11 @@ export default function ExamDetailPage() {
                     <Radio className="size-4" /> Live
                   </CardTitle>
                   <Badge variant="secondary">
-                    {live?.participants.filter((p) => p.status === "in_progress").length ?? 0} in progress
+                    {liveState?.participants.filter((p) => p.status === "in_progress").length ?? 0} in progress
                   </Badge>
                 </CardHeader>
                 <CardContent>
-                  {!live || live.participants.length === 0 ? (
+                  {!liveState || liveState.participants.length === 0 ? (
                     <p className="text-muted-foreground text-sm">
                       No students have joined yet. Share the link when they are seated.
                     </p>
@@ -264,7 +269,7 @@ export default function ExamDetailPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {live.participants.map((p) => (
+                        {liveState.participants.map((p) => (
                           <TableRow key={p.attemptId}>
                             <TableCell className="font-mono text-xs">{p.rollNo}</TableCell>
                             <TableCell>{p.name}</TableCell>

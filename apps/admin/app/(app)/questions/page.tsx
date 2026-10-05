@@ -63,20 +63,23 @@ export default function QuestionsPage() {
   );
   const selectedTopic = topics.find((topic) => topic.id === selectedId) ?? null;
 
-  const loadTopics = useCallback(async () => {
-    setLoadingTopics(true);
-    try {
-      const list = await topicApi.list();
-      setTopics(list);
-      setSelectedId(
-        (current) => current ?? list.find((t) => t.parentId !== null)?.id ?? list[0]?.id ?? null,
-      );
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Could not load topics");
-    } finally {
-      setLoadingTopics(false);
-    }
-  }, []);
+  const loadTopics = useCallback(
+    () =>
+      topicApi
+        .list()
+        .then((list) => {
+          setTopics(list);
+          setSelectedId(
+            (current) =>
+              current ?? list.find((t) => t.parentId !== null)?.id ?? list[0]?.id ?? null,
+          );
+        })
+        .catch((error) => {
+          toast.error(error instanceof ApiError ? error.message : "Could not load topics");
+        })
+        .finally(() => setLoadingTopics(false)),
+    [],
+  );
 
   useEffect(() => {
     void loadTopics();
@@ -87,25 +90,39 @@ export default function QuestionsPage() {
     return () => clearTimeout(handle);
   }, [search]);
 
-  // A new topic or a new search starts back at the first page.
-  useEffect(() => {
+  // A new folder or a new search starts back at the first page. This is
+  // derived during render — guarded by the previous key — rather than fixed up
+  // in an effect, so the query below is never issued for page N of a scope
+  // that has already changed. Selecting nothing is derived the same way: the
+  // list simply reads as empty instead of being emptied after painting.
+  const scopeKey = `${selectedId ?? ""}|${term}`;
+  const [lastScopeKey, setLastScopeKey] = useState(scopeKey);
+  if (scopeKey !== lastScopeKey) {
+    setLastScopeKey(scopeKey);
     setOffset(0);
-  }, [selectedId, term]);
+    setLoadingQuestions(selectedId !== null);
+    if (!selectedId) {
+      setQuestions([]);
+      setTotal(0);
+    }
+  }
 
   /** Monotonic id so a slower, older page never overwrites a newer one. */
   const requestId = useRef(0);
 
+  // The caller decides whether this is worth a spinner; the effect's first
+  // load is already covered by `selectedId` changing above, and the pager and
+  // `reloadQuestions` arm it from their own handlers.
   const loadQuestions = useCallback(
-    async (
+    (
       scope: { id: string; isRoot: boolean },
       term: string,
       pageOffset: number,
       pageLimit: number,
     ) => {
       const id = ++requestId.current;
-      setLoadingQuestions(true);
-      try {
-        const page = await questionApi.list({
+      return questionApi
+        .list({
           // A folder is a pool: picking a topic asks for its whole subtree,
           // not just the questions filed directly beneath it.
           topicId: scope.isRoot ? scope.id : undefined,
@@ -113,26 +130,25 @@ export default function QuestionsPage() {
           search: term || undefined,
           offset: pageOffset,
           limit: pageLimit,
+        })
+        .then((page) => {
+          if (id !== requestId.current) return;
+          setQuestions(page.items);
+          setTotal(page.total);
+        })
+        .catch((error) => {
+          if (id !== requestId.current) return;
+          toast.error(error instanceof ApiError ? error.message : "Could not load questions");
+        })
+        .finally(() => {
+          if (id === requestId.current) setLoadingQuestions(false);
         });
-        if (id !== requestId.current) return;
-        setQuestions(page.items);
-        setTotal(page.total);
-      } catch (error) {
-        if (id !== requestId.current) return;
-        toast.error(error instanceof ApiError ? error.message : "Could not load questions");
-      } finally {
-        if (id === requestId.current) setLoadingQuestions(false);
-      }
     },
     [],
   );
 
   useEffect(() => {
-    if (!selectedId) {
-      setQuestions([]);
-      setTotal(0);
-      return;
-    }
+    if (!selectedId) return;
     void loadQuestions(
       { id: selectedId, isRoot: selectedTopic?.parentId === null },
       term,
@@ -144,6 +160,7 @@ export default function QuestionsPage() {
   /** Refetch whatever is selected right now (after a save, a delete, …). */
   const reloadQuestions = useCallback(() => {
     if (!selectedId) return;
+    setLoadingQuestions(true);
     void loadQuestions(
       { id: selectedId, isRoot: selectedTopic?.parentId === null },
       term,
@@ -212,7 +229,9 @@ export default function QuestionsPage() {
       /* leave 0 — the exam page still works, it just won't show a pool size */
     }
     const draft = {
-      key: Math.random().toString(36).slice(2, 10),
+      // Deterministic rather than random: this key only ever names one pool,
+      // and anything the builder adds for itself gets its own key.
+      key: `pool-${topic.id}`,
       kind: isRoot ? "topic" : "subtopic",
       ...(isRoot ? { topicId: topic.id } : { subtopicId: topic.id }),
       label: topic.name,
@@ -420,6 +439,7 @@ export default function QuestionsPage() {
                 noun="questions"
                 className="mt-5"
                 onChange={({ limit: nextLimit, offset: nextOffset }) => {
+                  setLoadingQuestions(true);
                   setLimit(nextLimit);
                   setOffset(nextOffset);
                 }}
@@ -496,6 +516,7 @@ export default function QuestionsPage() {
         defaultSubtopicId={selectedId}
         onAdded={(targetId) => {
           // Refresh the bank so the new set is visible wherever it landed.
+          setLoadingTopics(true);
           void loadTopics();
           if (targetId !== selectedId) setSelectedId(targetId);
           else reloadQuestions();

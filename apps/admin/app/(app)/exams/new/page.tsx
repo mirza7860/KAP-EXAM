@@ -31,6 +31,20 @@ function toLocalInput(date: Date): string {
   )}:${pad(date.getMinutes())}`;
 }
 
+/** The question-bank prefill, if the bank handed one over before we mounted. */
+function readPrefill(): SourceDraft | null {
+  // The defaults can't be in state before hydration (the server can't know the
+  // clock), so they are read here and committed with everything else below.
+  try {
+    const raw = sessionStorage.getItem("kap_exam_prefill");
+    if (!raw) return null;
+    sessionStorage.removeItem("kap_exam_prefill");
+    return JSON.parse(raw) as SourceDraft;
+  } catch {
+    return null;
+  }
+}
+
 function stripSource(source: SourceDraft): PaperSourceInput {
   if (source.kind === "questions") return { kind: "questions", questionIds: source.questionIds };
   if (source.kind === "subtopic")
@@ -51,31 +65,35 @@ export default function NewExamPage() {
   const [sources, setSources] = useState<SourceDraft[]>([]);
   const [creating, setCreating] = useState(false);
 
+  // Boot the form once. Everything that belongs to mount — the default time
+  // window and a prefill from the question bank — is computed up front, then
+  // committed together with the batch list after the request resolves. The
+  // effect body itself never sets state, so there is no render with blanks in
+  // it that a second render has to correct.
   useEffect(() => {
-    const s = new Date();
-    s.setMinutes(s.getMinutes() + 5, 0, 0);
-    setStart(toLocalInput(s));
-    setEnd(toLocalInput(new Date(s.getTime() + 60 * 60_000)));
+    const startsAt = new Date();
+    startsAt.setMinutes(startsAt.getMinutes() + 5, 0, 0);
+    const prefill = readPrefill();
 
+    let cancelled = false;
     batchApi
       .list()
+      .catch(() => {
+        if (!cancelled) toast.error("Could not load batches");
+        return [] as BatchSummary[];
+      })
       .then((list) => {
+        if (cancelled) return;
+        setStart(toLocalInput(startsAt));
+        setEnd(toLocalInput(new Date(startsAt.getTime() + 60 * 60_000)));
         setBatches(list);
         setBatchId((current) => current || list[0]?.id || "");
-      })
-      .catch(() => toast.error("Could not load batches"));
+        if (prefill) setSources([prefill]);
+      });
 
-    // A prefill handed over from the question bank ("Create exam from this").
-    try {
-      const raw = sessionStorage.getItem("kap_exam_prefill");
-      if (raw) {
-        const draft = JSON.parse(raw) as SourceDraft;
-        setSources([draft]);
-        sessionStorage.removeItem("kap_exam_prefill");
-      }
-    } catch {
-      /* ignore */
-    }
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function onSubmit() {

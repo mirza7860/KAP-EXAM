@@ -25,7 +25,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { QUESTION_TYPE_LABELS } from "@/lib/question-form";
 import { Loader2, Minus, Plus, Sparkles, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { ApiError, getToken, questionApi, topicApi } from "@/lib/api";
 
@@ -75,20 +75,29 @@ export function AiGenerateDialog({
   const subtopics = useMemo(() => topics.filter((t) => t.parentId !== null), [topics]);
   const rootTopics = useMemo(() => topics.filter((t) => t.parentId === null), [topics]);
 
-  useEffect(() => {
-    if (!open) return;
-    setSubtopicId(defaultSubtopicId ?? subtopics[0]?.id ?? "");
-    setNewMode(false);
-    setNewTopicId(rootTopics[0]?.id ?? "");
-    setNewName("");
-    setPrompt("");
-    setCount(10);
-    setTypes(ALL_TYPES);
-    setLevel("");
-    setDrafts([]);
-    setWarnings([]);
-    setSavedCount(0);
-  }, [open, defaultSubtopicId, subtopics, rootTopics]);
+  // A fresh draft every time it opens. Committed during render and guarded by
+  // what actually changed, so the first paint is already this conversation
+  // rather than the last one you generated.
+  const seed = `${open}|${defaultSubtopicId ?? ""}|${subtopics[0]?.id ?? ""}|${
+    rootTopics[0]?.id ?? ""
+  }`;
+  const [lastSeed, setLastSeed] = useState(seed);
+  if (seed !== lastSeed) {
+    setLastSeed(seed);
+    if (open) {
+      setSubtopicId(defaultSubtopicId ?? subtopics[0]?.id ?? "");
+      setNewMode(false);
+      setNewTopicId(rootTopics[0]?.id ?? "");
+      setNewName("");
+      setPrompt("");
+      setCount(10);
+      setTypes(ALL_TYPES);
+      setLevel("");
+      setDrafts([]);
+      setWarnings([]);
+      setSavedCount(0);
+    }
+  }
 
   function toggleType(type: QuestionType, on: boolean) {
     setTypes((current) => {

@@ -65,17 +65,22 @@ export default function ReportsPage() {
       .finally(() => setListLoading(false));
   }, [examLimit, examOffset]);
 
-  const load = useCallback(async (id: string, offset: number, limit: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      setReport(await reportApi.exam(id, { offset, limit }));
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not load report");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // The effect only kicks the request off, and every commit happens in a
+  // promise callback. `open` re-arms the skeleton from its own click handler.
+  const load = useCallback(
+    (id: string, offset: number, limit: number) =>
+      reportApi
+        .exam(id, { offset, limit })
+        .then((page) => {
+          setReport(page);
+          setError(null);
+        })
+        .catch((e) => {
+          setError(e instanceof ApiError ? e.message : "Could not load report");
+        })
+        .finally(() => setLoading(false)),
+    [],
+  );
 
   useEffect(() => {
     if (examId) void load(examId, reportOffset, reportLimit);
@@ -83,6 +88,7 @@ export default function ReportsPage() {
 
   const open = (id: string) => {
     setReport(null);
+    setLoading(true);
     setReportOffset(0);
     setExamId(id);
   };
@@ -176,7 +182,12 @@ export default function ReportsPage() {
       action={
         <Button
           variant="outline"
-          onClick={() => examId && void load(examId, reportOffset, reportLimit)}
+          onClick={() => {
+            if (!examId) return;
+            setLoading(true);
+            setError(null);
+            void load(examId, reportOffset, reportLimit);
+          }}
         >
           Try again
         </Button>

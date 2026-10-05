@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { ApiError, batchApi, type BatchSummary } from "@/lib/api";
 
@@ -46,13 +46,19 @@ export function BatchFormDialog({
   const [sourceId, setSourceId] = useState("");
   const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    setName("");
-    setDescription("");
-    setSourceId(copyFromId ?? "");
-    setCopy(Boolean(copyFromId));
-  }, [open, copyFromId]);
+  // Seed the form from the parent's choice as it opens, committed during
+  // render rather than after a paint carrying the previous values.
+  const seed = `${open}|${copyFromId ?? ""}`;
+  const [lastSeed, setLastSeed] = useState(seed);
+  if (seed !== lastSeed) {
+    setLastSeed(seed);
+    if (open) {
+      setName("");
+      setDescription("");
+      setSourceId(copyFromId ?? "");
+      setCopy(Boolean(copyFromId));
+    }
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();

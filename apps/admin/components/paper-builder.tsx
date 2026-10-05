@@ -16,7 +16,7 @@ import { QUESTION_TYPE_LABELS } from "@/lib/question-form";
 import { Loader2, Plus, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ApiError, questionApi, topicApi, type PaperSourceInput } from "@/lib/api";
+import { questionApi, topicApi, type PaperSourceInput } from "@/lib/api";
 import type { Question, Topic } from "@kap-exam/shared";
 import { MathText } from "@kap-exam/ui";
 
@@ -60,9 +60,18 @@ export function PaperBuilder({
   const [manualSubtopic, setManualSubtopic] = useState("");
   const [manualQuestions, setManualQuestions] = useState<Question[]>([]);
   const [manualTotal, setManualTotal] = useState(0);
-  const [manualLoading, setManualLoading] = useState(false);
   const [manualSearch, setManualSearch] = useState("");
   const [manualSelected, setManualSelected] = useState<Set<string>>(new Set());
+
+  // Whether the picker is busy is derived rather than toggled: it is true
+  // exactly while the results for what is on screen have not settled. No
+  // control has to remember to switch a flag on first, and a request that
+  // comes back out of order leaves the spinner on until the one that counts
+  // has landed.
+  const manualKey =
+    mode === "manual" && manualSubtopic ? `${manualSubtopic}|${manualSearch}` : null;
+  const [manualSettled, setManualSettled] = useState<string | null>(null);
+  const manualLoading = manualKey !== null && manualKey !== manualSettled;
 
   useEffect(() => {
     Promise.all([topicApi.list(), topicApi.counts()])
@@ -78,8 +87,7 @@ export function PaperBuilder({
   }, []);
 
   useEffect(() => {
-    if (mode !== "manual" || !manualSubtopic) return;
-    setManualLoading(true);
+    if (manualKey === null) return;
     questionApi
       .list({ subtopicId: manualSubtopic, search: manualSearch || undefined, limit: 100 })
       .then((page) => {
@@ -87,8 +95,8 @@ export function PaperBuilder({
         setManualTotal(page.total);
       })
       .catch(() => toast.error("Could not load questions"))
-      .finally(() => setManualLoading(false));
-  }, [mode, manualSubtopic, manualSearch]);
+      .finally(() => setManualSettled(manualKey));
+  }, [manualKey, manualSubtopic, manualSearch]);
 
   const label = useCallback(
     (topic: Topic) => (topic.parentId ? `— ${topic.name}` : topic.name),

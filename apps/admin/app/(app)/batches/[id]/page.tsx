@@ -46,23 +46,23 @@ export default function BatchDetailPage() {
   const [renameOpen, setRenameOpen] = useState(false);
   const [profileStudentId, setProfileStudentId] = useState<string | null>(null);
 
+  // `loading` starts true; this only settles it. Callers that want the
+  // spinner re-arm it from their own event handler.
   const load = useCallback(
-    async (pageOffset: number, pageLimit: number) => {
-      setLoading(true);
-      try {
-        const [detail, rosterPage] = await Promise.all([
-          batchApi.get(batchId),
-          batchApi.students(batchId, { limit: pageLimit, offset: pageOffset }),
-        ]);
-        setBatch(detail);
-        setRoster(rosterPage.items);
-        setRosterTotal(rosterPage.total);
-      } catch (error) {
-        toast.error(error instanceof ApiError ? error.message : "Could not load the batch");
-      } finally {
-        setLoading(false);
-      }
-    },
+    (pageOffset: number, pageLimit: number) =>
+      Promise.all([
+        batchApi.get(batchId),
+        batchApi.students(batchId, { limit: pageLimit, offset: pageOffset }),
+      ])
+        .then(([detail, rosterPage]) => {
+          setBatch(detail);
+          setRoster(rosterPage.items);
+          setRosterTotal(rosterPage.total);
+        })
+        .catch((error) => {
+          toast.error(error instanceof ApiError ? error.message : "Could not load the batch");
+        })
+        .finally(() => setLoading(false)),
     [batchId],
   );
 
@@ -180,6 +180,7 @@ export default function BatchDetailPage() {
               offset={offset}
               noun="students"
               onChange={({ limit: nextLimit, offset: nextOffset }) => {
+                setLoading(true);
                 setLimit(nextLimit);
                 setOffset(nextOffset);
               }}
@@ -194,7 +195,10 @@ export default function BatchDetailPage() {
             open={addOpen}
             onOpenChange={setAddOpen}
             batchId={batch.id}
-            onAdded={() => void load(offset, limit)}
+            onAdded={() => {
+              setLoading(true);
+              void load(offset, limit);
+            }}
           />
           <RenameBatchDialog
             open={renameOpen}
@@ -229,12 +233,16 @@ function AddStudentDialog({
   const [rollNo, setRollNo] = useState("");
   const [pending, setPending] = useState(false);
 
-  useEffect(() => {
+  // Clear the fields as the sheet opens, committed during render so the first
+  // paint is already correct rather than showing the previous student.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setName("");
       setRollNo("");
     }
-  }, [open]);
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -308,12 +316,16 @@ function RenameBatchDialog({
   const [description, setDescription] = useState(batch.description ?? "");
   const [pending, setPending] = useState(false);
 
-  useEffect(() => {
+  // Same contract: seed from the batch as it opens, not after it has painted
+  // with whatever was renamed last time.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setName(batch.name);
       setDescription(batch.description ?? "");
     }
-  }, [open, batch]);
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();

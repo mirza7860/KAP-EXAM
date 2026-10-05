@@ -18,17 +18,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [teacher, setTeacher] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore a session on first load if a token is present.
+  // Restore a session on first load if a token is present. The no-token case
+  // goes through the same settled promise so the effect body itself never
+  // commits state — it only starts the work.
   useEffect(() => {
     let cancelled = false;
-    if (!getToken()) {
-      setLoading(false);
-      return;
-    }
-    authApi
-      .me()
+    const restoring = getToken() ? authApi.me() : Promise.resolve(null);
+    restoring
       .then((session) => {
-        if (!cancelled) setTeacher(session);
+        if (!cancelled && session) setTeacher(session);
       })
       .catch(() => {
         setToken(null);

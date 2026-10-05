@@ -608,10 +608,9 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean
 }) {
-  // Random width between 50 to 90%.
-  const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  }, [])
+  // A fixed placeholder width: this renders during render, and a random one
+  // would change the layout every time the skeleton re-renders anyway.
+  const width = "70%"
 
   return (
     <div

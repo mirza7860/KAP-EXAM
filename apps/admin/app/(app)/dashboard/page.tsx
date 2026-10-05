@@ -37,21 +37,33 @@ export default function DashboardPage() {
   // that calls Date.now() in render is impure and repaints unpredictably.
   const [now, setNow] = useState(0);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const next = await overviewApi.get();
-      setData(next);
-      setNow(Date.now());
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not load your workspace");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // The effect only ever settles the request: every state commit happens in a
+  // promise callback, so painting the page never triggers a second render.
+  const load = useCallback(
+    () =>
+      overviewApi
+        .get()
+        .then((next) => {
+          setData(next);
+          setNow(Date.now());
+          setError(null);
+        })
+        .catch((e) => {
+          setError(e instanceof ApiError ? e.message : "Could not load your workspace");
+        })
+        .finally(() => setLoading(false)),
+    [],
+  );
 
   useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Re-arming the skeleton is the caller's job — that is what an event
+  // handler is for.
+  const retry = useCallback(() => {
+    setLoading(true);
+    setError(null);
     void load();
   }, [load]);
 
@@ -74,7 +86,7 @@ export default function DashboardPage() {
         ) : error || !data ? (
           <div className="border-border/80 flex flex-col items-center gap-3 rounded-2xl border border-dashed py-20 text-center">
             <p className="text-muted-foreground text-sm">{error ?? "Something went wrong"}</p>
-            <Button variant="outline" onClick={() => void load()}>
+            <Button variant="outline" onClick={retry}>
               Try again
             </Button>
           </div>

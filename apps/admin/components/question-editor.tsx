@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ImagePlus, Loader2, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { LatexEditor } from "@kap-exam/ui";
 import { ApiError, api, mediaUrl, questionApi } from "@/lib/api";
@@ -86,10 +86,14 @@ export function QuestionEditor({
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Reset the form each time the dialog opens.
-  useEffect(() => {
+  // Reset the form each time it opens. This is committed during render and
+  // guarded by the previous value, so the dialog never paints the question you
+  // just finished editing before correcting itself.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) setDraft(toDraft(initial));
-  }, [open, initial]);
+  }
 
   const isChoice = draft.type === "mcq_single" || draft.type === "mcq_multi";
 
