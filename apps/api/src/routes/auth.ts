@@ -21,6 +21,26 @@ function setSessionCookie(c: Context<AppBindings>, token: string, secure: boolea
   });
 }
 
+/**
+ * Self-registration is open only until the first account has seeded itself.
+ *
+ * The schema is single-tenant: no teacher route filters by teacher id, so an
+ * owner account reads every batch, every student name + roll and every result.
+ * On a public URL an open signup would therefore be open data, and the admin's
+ * login page offers one to anyone who finds it. Production closes it again
+ * after the first teacher; dev and the e2e suite are never gated.
+ */
+async function signupIsOpen(c: Context<AppBindings>) {
+  if (c.env.ENVIRONMENT !== "production") return true;
+  const first = await c
+    .get("db")
+    .select({ id: schema.teachers.id })
+    .from(schema.teachers)
+    .limit(1)
+    .get();
+  return !first;
+}
+
 authRoutes.post("/signup", async (c) => {
   const parsed = teacherSignUpSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
@@ -31,6 +51,11 @@ authRoutes.post("/signup", async (c) => {
   }
   const { name, email, password } = parsed.data;
   const db = c.get("db");
+
+  // Checked before the email lookup so a rejected stranger learns nothing.
+  if (!(await signupIsOpen(c))) {
+    throw new ApiError(apiErrorCodes.forbidden, "Registration is closed");
+  }
 
   const existing = await db.select().from(schema.teachers).where(eq(schema.teachers.email, email)).get();
   if (existing) throw new ApiError(apiErrorCodes.conflict, "That email is already registered");
@@ -99,3 +124,9 @@ authRoutes.post("/signout", (c) => {
 });
 
 authRoutes.get("/me", requireTeacher, (c) => c.json({ data: c.get("teacher") }));
+
+// Public, so the login page can hide its "Sign up" link instead of offering a
+// form the Worker would reject. Purely cosmetic - signupIsOpen is the gate.
+authRoutes.get("/signup-status", async (c) =>
+  c.json({ data: { open: await signupIsOpen(c) } }),
+);

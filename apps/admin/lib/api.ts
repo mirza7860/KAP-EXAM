@@ -121,6 +121,8 @@ export const authApi = {
   signUp: (name: string, email: string, password: string) =>
     api.post<TeacherIdentity & { token: string }>("/api/auth/signup", { name, email, password }),
   me: () => api.get<Session>("/api/auth/me"),
+  /** Whether self-registration is still open here. The Worker is the authority. */
+  signupStatus: () => api.get<{ open: boolean }>("/api/auth/signup-status"),
 };
 
 export const topicApi = {

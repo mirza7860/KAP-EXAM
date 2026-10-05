@@ -8,7 +8,7 @@ import { Logo } from "@kap-exam/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { ApiError } from "@/lib/api";
+import { ApiError, authApi } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
 export default function LoginPage() {
@@ -19,18 +19,33 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
+  // null until we hear from the Worker. Nothing is offered while unknown, so
+  // a closed registration never flashes a link first.
+  const [signupOpen, setSignupOpen] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!loading && teacher) router.replace("/dashboard");
   }, [loading, teacher, router]);
 
+  // Fails open: the link is cosmetic, the Worker rejects the signup anyway,
+  // and hiding it on a network error would strand the first account.
+  useEffect(() => {
+    authApi
+      .signupStatus()
+      .then((d) => setSignupOpen(d.open))
+      .catch(() => setSignupOpen(true));
+  }, []);
+
+  const canSignUp = signupOpen === true;
+  const active = canSignUp ? mode : "signin";
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setPending(true);
     try {
-      if (mode === "signin") await signIn(email, password);
+      if (active === "signin") await signIn(email, password);
       else await signUp(name, email, password);
-      toast.success(mode === "signin" ? "Welcome back" : "Account created");
+      toast.success(active === "signin" ? "Welcome back" : "Account created");
       router.replace("/dashboard");
     } catch (error) {
       const message =
@@ -48,12 +63,12 @@ export default function LoginPage() {
       <Logo height={34} />
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>{mode === "signin" ? "Sign in" : "Create your account"}</CardTitle>
+          <CardTitle>{active === "signin" ? "Sign in" : "Create your account"}</CardTitle>
           <CardDescription>Teacher access to the KAP exam workspace.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
-            {mode === "signup" && (
+            {active === "signup" && (
               <div className="space-y-2">
                 <Label htmlFor="name">Name</Label>
                 <Input
@@ -83,21 +98,23 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                autoComplete={active === "signin" ? "current-password" : "new-password"}
                 required
-                minLength={mode === "signup" ? 8 : undefined}
+                minLength={active === "signup" ? 8 : undefined}
               />
             </div>
             <Button type="submit" className="w-full" disabled={pending}>
-              {pending ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
+              {pending ? "Please wait…" : active === "signin" ? "Sign in" : "Create account"}
             </Button>
-            <button
-              type="button"
-              onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-              className="text-muted-foreground hover:text-foreground w-full text-center text-sm transition-colors"
-            >
-              {mode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
-            </button>
+            {canSignUp && (
+              <button
+                type="button"
+                onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+                className="text-muted-foreground hover:text-foreground w-full text-center text-sm transition-colors"
+              >
+                {mode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
+              </button>
+            )}
           </form>
         </CardContent>
       </Card>

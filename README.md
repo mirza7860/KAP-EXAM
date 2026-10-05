@@ -16,8 +16,9 @@ exams taken on a phone, and report cards that survive semester changes.
 
 ## The shape of the product
 
-- **Question bank** — topics → subtopics → questions, plus reusable **modules**
-  ("like Google Drive"). Teachers compose exams from modules or hand-picked questions.
+- **Question bank** — topics → subtopics → questions. Teachers compose an exam
+  from a topic's pool or hand-picked questions. There is no separate "module"
+  layer: topics are the pools (see D13).
 - **Batches** — semester cohorts. Copy a batch to roll into a new semester; the
   copy takes the roster, never the past exams.
 - **Exams** — fixed wall-clock window + per-attempt duration. Publishing
@@ -66,6 +67,25 @@ pnpm dev
 ```
 
 Default dev ports: admin `3000`, student `5173`, api `8787`.
+
+> **Note:** the Cloudflare resources already exist and their ids are already in
+> `apps/api/wrangler.toml`, so step 1 is a no-op here. Local D1 state is keyed by
+> `database_id`, so changing that id moves your local database — copy
+> `.wrangler/state/v3/d1/` across if you ever have to.
+
+## Deployment
+
+Production is covered end to end in [`docs/deploy.md`](docs/deploy.md): which
+Cloudflare resources exist, the order to deploy the Worker and set
+`JWT_SECRET`, the Vercel settings and build-time env vars for both web apps,
+seeding the first teacher, and a post-deploy checklist.
+
+In short: **API → Cloudflare Workers, both web apps → Vercel**, and
+`NEXT_PUBLIC_API_URL` / `VITE_API_URL` must be set before the first build
+because they are inlined into the bundle.
+
+CI (`.github/workflows/ci.yml`) runs typecheck, lint, tests, build and the API
+e2e suite on every push and pull request. It never deploys.
 
 ## Conventions
 

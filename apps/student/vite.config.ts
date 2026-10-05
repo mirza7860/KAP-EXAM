@@ -22,9 +22,14 @@ export default defineConfig({
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
+        // PNGs first: installability on Android wants a real 192/512 raster,
+        // and iOS ignores SVG entirely. The maskable tile is opaque edge to
+        // edge because the launcher crops it over the wallpaper.
         icons: [
+          { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+          { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
           { src: "/icon.svg", sizes: "any", type: "image/svg+xml" },
-          { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
         ],
       },
       workbox: {

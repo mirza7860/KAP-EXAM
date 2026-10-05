@@ -23,8 +23,7 @@ enabled = true
 [[d1_databases]]
 binding = "DB"
 database_name = "kap-exam-db"
-# Replace after `wrangler d1 create kap-exam-db`.
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "7bf4d271-c727-4f01-b1e2-2979efc2f800"
 migrations_dir = "../../packages/db/migrations"
 
 # One Durable Object per exam session: authoritative timer, live roster,
@@ -45,7 +44,7 @@ bucket_name = "kap-exam-materials"
 # Join-code lookup, rate limiting, ephemeral counters.
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "e7a8fe06cb004b8cb6e79ceb7d77efee"
 
 # ---------------------------------------------------------------------------
 # Production
@@ -55,10 +54,13 @@ id = "REPLACE_WITH_KV_NAMESPACE_ID"
 name = "kap-exam-api"
 vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://kap-exam.vercel.app,https://kap-exam-student.vercel.app", HEARTBEAT_GRACE_SECONDS = "45" }
 
+# Same database as the dev config above: `wrangler dev` never touches it (it
+# runs on local D1), so the single remote database is the production one, and
+# `pnpm db:migrate:remote` is what puts the schema on it.
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "kap-exam-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "7bf4d271-c727-4f01-b1e2-2979efc2f800"
 migrations_dir = "../../packages/db/migrations"
 
 [[env.production.durable_objects.bindings]]
@@ -71,4 +73,4 @@ bucket_name = "kap-exam-materials"
 
 [[env.production.kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "e7a8fe06cb004b8cb6e79ceb7d77efee"

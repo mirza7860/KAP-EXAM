@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version comes from the root `packageManager` field.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # admin = eslint, student = oxlint, api/db/shared/ui = tsc --noEmit.
+      # Prettier is deliberately absent: `pnpm format:check` is not green and
+      # reformatting the repo wholesale is a decision, not a gate.
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      # Builds all three apps; the api's "build" is `wrangler deploy --dry-run`,
+      # so a broken bundle fails here without touching Cloudflare.
+      - name: Build
+        run: pnpm build
+        env:
+          # Inlined at build time. CI has no real backend, so the fallbacks are
+          # exercised as-is; production values live in Vercel's env instead.
+          NEXT_PUBLIC_API_URL: http://localhost:8787
+          NEXT_PUBLIC_STUDENT_URL: http://localhost:5173
+
+  e2e:
+    name: API end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # One step so the worker outlives the health check: `wrangler dev` runs on
+      # local D1/KV, so this needs no Cloudflare credentials.
+      - name: Run the regression suite
+        run: |
+          pnpm --filter @kap-exam/api dev > wrangler.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8787/health > /dev/null; then
+              echo "api is up"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "::error::api never became healthy"
+              cat wrangler.log
+              exit 1
+            fi
+            sleep 2
+          done
+          node apps/api/scripts/e2e.mjs http://127.0.0.1:8787
