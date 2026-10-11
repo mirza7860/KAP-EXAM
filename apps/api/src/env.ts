@@ -14,6 +14,12 @@ export interface Env {
   ALLOWED_ORIGINS: string;
   HEARTBEAT_GRACE_SECONDS: string;
   JWT_SECRET: string;
+  /**
+   * Shared secret for the KAP APP backend's results read
+   * (`routes/service.ts`). Set with `wrangler secret put SERVICE_TOKEN` —
+   * never committed, never a JWT, and scoped to that one route.
+   */
+  SERVICE_TOKEN: string;
 }
 
 /** Hono context shape: `c.get("db")` and `c.get("teacher")` are typed. */

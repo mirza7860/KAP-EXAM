@@ -12,6 +12,7 @@ import { mediaRoutes } from "./routes/media.js";
 import { overviewRoutes } from "./routes/overview.js";
 import { questionRoutes, topicRoutes } from "./routes/questions.js";
 import { reportRoutes } from "./routes/reports.js";
+import { serviceRoutes } from "./routes/service.js";
 
 const app = new Hono<AppBindings>();
 
@@ -39,6 +40,10 @@ app.route("/api/auth", authRoutes);
 app.route("/api/attempts", attemptRoutes);
 // Media GET is public (unguessable key); POST is guarded inside the router.
 app.route("/api/media", mediaRoutes);
+// Service-to-service reads for the KAP APP backend. Publicly mounted but
+// self-authenticating: the router checks SERVICE_TOKEN itself, so mounting it
+// under the teacher routes (and their JWT guard) would be wrong.
+app.route("/api/service", serviceRoutes);
 
 // Protected: everything a signed-in teacher does.
 const teacherRoutes = new Hono<AppBindings>();
