@@ -65,6 +65,11 @@ function requireService(c: {
   /* Fail closed: an unset secret denies everything rather than letting the
      comparison run against an empty string. */
   if (!configured || !provided || !tokensEqual(provided, configured)) {
+    /* Vague to the caller, specific here: operators need to tell a missing
+       token from a wrong one without ever logging a value. */
+    console.warn(
+      `[service] denied (configured: ${configured ? "yes" : "no"}, presented: ${provided ? "yes" : "no"})`,
+    );
     return c.json(
       { error: { code: "unauthorized", message: "Invalid service credentials" } },
       401,
